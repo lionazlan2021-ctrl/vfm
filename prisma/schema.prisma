@@ -1,0 +1,63 @@
+// VFM.com — Database Schema
+//
+// Provider is set to SQLite for zero-setup local development.
+// For production, change provider to "postgresql" and set DATABASE_URL
+// to a real Postgres connection string (see .env.example and SETUP.md).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // change to "postgresql" for production
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+
+  searches  Search[]
+  saved     SavedProduct[]
+  tracked   TrackedProduct[]
+}
+
+model Search {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  query     String
+  resultJson String  // full AI response, stored as JSON text
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model SavedProduct {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  query     String
+  store     String
+  price     String
+  listingJson String // full listing object, stored as JSON text
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model TrackedProduct {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  query     String
+  store     String
+  price     String
+  listingJson String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}

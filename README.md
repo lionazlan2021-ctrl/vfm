@@ -42,11 +42,14 @@ See **SETUP.md** for the full step-by-step guide, including how to get each of t
 ```bash
 npm install
 cp .env.example .env       # then fill in ANTHROPIC_API_KEY and AUTH_SECRET
-npm run db:setup           # creates the local SQLite database
 npm run dev
 ```
 
 Visit `http://localhost:3000`.
+
+`npm run dev` applies any pending database migrations before starting, so the
+local SQLite database is created for you on first run — there is no separate
+setup step.
 
 ### Working without an API key
 
@@ -66,7 +69,7 @@ chat — so you can develop and demo the whole flow offline. Set it back to `0`
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Start the dev server |
+| `npm run dev` | Apply pending migrations, then start the dev server |
 | `npm run build` | Production build (fails on lint or type errors) |
 | `npm test` | Run the unit tests |
 | `npm run typecheck` | TypeScript check only |

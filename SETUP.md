@@ -99,13 +99,12 @@ Now open `.env` in any text editor (Notepad, TextEdit, VS Code) and:
 3. Leave `DATABASE_URL="file:./dev.db"` as-is for now — that's correct for testing on your computer
 4. Save the file
 
-### 2.6 Set up the local database
-In the terminal, type:
-```
-npm run db:setup
-```
-This creates a small database file on your computer so signup/login/saved
-products work. You'll see it create some files — that's expected.
+### 2.6 About the local database
+There's nothing to do here — `npm run dev` in the next step creates a small
+database file on your computer automatically, so signup/login/saved products
+work. You'll see it mention "migrations" the first time; that's expected.
+
+(If you ever want to do it separately, `npm run db:setup` does the same thing.)
 
 > No Anthropic key yet, or want to avoid spending anything while you look
 > around? Set `VFM_MOCK_SEARCH=1` in `.env`. Searches then return fixed example

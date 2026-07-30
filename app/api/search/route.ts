@@ -1,41 +1,83 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchProducts } from "@/lib/ai";
+import { z } from "zod";
+import { searchProducts, isSupportedImageType, SUPPORTED_IMAGE_TYPES } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
 import { getCurrentSession } from "@/lib/auth";
+import { apiError, handle, readJson } from "@/lib/http";
+import { callerKey, hit, LIMITS, rateLimitHeaders } from "@/lib/rate-limit";
+
+/**
+ * Roughly 3.4 MB of original image once base64 is decoded. Anthropic accepts up
+ * to 5 MB per image; staying under that avoids paying for a request that will
+ * be rejected anyway.
+ */
+const MAX_IMAGE_BASE64_CHARS = 4_500_000;
+const MAX_BODY_BYTES = 6 * 1024 * 1024;
+
+const SearchSchema = z
+  .object({
+    query: z.string().max(300, "Search is limited to 300 characters.").optional(),
+    imageBase64: z
+      .string()
+      .max(MAX_IMAGE_BASE64_CHARS, "That image is too large. Please use one under 3 MB.")
+      .optional(),
+    imageMediaType: z.string().optional(),
+  })
+  .refine((d) => Boolean(d.query?.trim()) || Boolean(d.imageBase64), {
+    message: "Enter a product to search for, or upload a photo.",
+  })
+  .refine((d) => !d.imageBase64 || Boolean(d.imageMediaType), {
+    message: "The uploaded image is missing its file type.",
+  })
+  .refine((d) => !d.imageMediaType || isSupportedImageType(d.imageMediaType), {
+    message: `Unsupported image type. Use one of: ${SUPPORTED_IMAGE_TYPES.join(", ")}.`,
+  });
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { query, imageBase64, imageMediaType } = body as {
-      query?: string;
-      imageBase64?: string;
-      imageMediaType?: string;
-    };
-
-    if (!query?.trim() && !imageBase64) {
-      return NextResponse.json({ error: "Provide a query or an image." }, { status: 400 });
-    }
-
-    const result = await searchProducts({ query: query || "", imageBase64, imageMediaType });
-
-    // If the user is logged in, save this search to their history (real DB write).
+  return handle("search", async () => {
     const session = await getCurrentSession();
-    if (session) {
-      await prisma.search.create({
-        data: {
-          userId: session.userId,
-          query: query || "Image search",
-          resultJson: JSON.stringify(result),
-        },
-      });
+
+    // Anonymous visitors get a much smaller allowance than signed-in users:
+    // every call here is a paid Anthropic web search.
+    const { limit, windowSeconds } = session ? LIMITS.searchUser : LIMITS.searchAnon;
+    const rl = hit(callerKey(req, session?.userId), limit, windowSeconds);
+    if (!rl.ok) {
+      return apiError(
+        "rate_limited",
+        session
+          ? "You've hit the hourly search limit. Please try again shortly."
+          : "Search limit reached. Log in or create a free account for a higher limit.",
+        { headers: rateLimitHeaders(rl) }
+      );
     }
 
-    return NextResponse.json(result);
-  } catch (err: any) {
-    console.error("Search API error:", err);
-    const message = err?.message?.includes("ANTHROPIC_API_KEY")
-      ? "The AI service is not configured. Add a real ANTHROPIC_API_KEY to your .env file."
-      : "Search failed. The AI service may be temporarily unavailable. Please try again.";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
+    const body = await readJson(req, SearchSchema, { maxBytes: MAX_BODY_BYTES });
+    const query = body.query?.trim() || "";
+
+    const result = await searchProducts({
+      query,
+      imageBase64: body.imageBase64,
+      imageMediaType: body.imageMediaType as never,
+    });
+
+    // Record the search for signed-in users. A history write must never sink an
+    // otherwise-good result the user already paid for.
+    let searchId: string | undefined;
+    if (session) {
+      try {
+        const saved = await prisma.search.create({
+          data: {
+            userId: session.userId,
+            query: query || "Image search",
+            resultJson: JSON.stringify(result),
+          },
+        });
+        searchId = saved.id;
+      } catch (err) {
+        console.error("[search] could not save to history:", err);
+      }
+    }
+
+    return NextResponse.json({ ...result, searchId }, { headers: rateLimitHeaders(rl) });
+  });
 }

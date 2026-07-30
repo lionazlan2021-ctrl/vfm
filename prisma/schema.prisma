@@ -1,63 +1,80 @@
 // VFM.com — Database Schema
 //
-// Provider is set to SQLite for zero-setup local development.
-// For production, change provider to "postgresql" and set DATABASE_URL
-// to a real Postgres connection string (see .env.example and SETUP.md).
+// Provider is SQLite for zero-setup local development.
+//
+// SWITCHING TO POSTGRES FOR PRODUCTION
+// Change `provider` below to "postgresql" and point DATABASE_URL at your
+// Postgres connection string. Because migrations are generated per provider,
+// the committed SQLite migrations in prisma/migrations/ will NOT apply to
+// Postgres — see the "Switching to Postgres" section of SETUP.md for the exact
+// steps. Changing this line alone is not enough.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite" // change to "postgresql" for production
+  provider = "sqlite" // change to "postgresql" for production — see SETUP.md
   url      = env("DATABASE_URL")
 }
 
 model User {
   id           String   @id @default(cuid())
+  // Stored lower-cased by the signup route so addresses are case-insensitive.
   email        String   @unique
   passwordHash String
   name         String
   createdAt    DateTime @default(now())
 
-  searches  Search[]
-  saved     SavedProduct[]
-  tracked   TrackedProduct[]
+  searches Search[]
+  saved    SavedProduct[]
+  tracked  TrackedProduct[]
 }
 
 model Search {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  query     String
-  resultJson String  // full AI response, stored as JSON text
-  createdAt DateTime @default(now())
+  id String @id @default(cuid())
 
-  @@index([userId])
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  query String
+  /// The full AI response, stored as JSON text. Read back by
+  /// GET /api/history/[id] so opening a past search costs nothing.
+  resultJson String
+  createdAt  DateTime @default(now())
+
+  // Matches the "my searches, newest first" query the history list runs.
+  @@index([userId, createdAt])
 }
 
 model SavedProduct {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  query     String
-  store     String
-  price     String
-  listingJson String // full listing object, stored as JSON text
-  createdAt DateTime @default(now())
+  id String @id @default(cuid())
 
-  @@index([userId])
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  query       String
+  store       String
+  price       String
+  listingJson String
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, query, store])
+  @@index([userId, createdAt])
 }
 
 model TrackedProduct {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  query     String
-  store     String
-  price     String
-  listingJson String
-  createdAt DateTime @default(now())
+  id String @id @default(cuid())
 
-  @@index([userId])
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  query       String
+  store       String
+  price       String
+  listingJson String
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, query, store])
+  @@index([userId, createdAt])
 }

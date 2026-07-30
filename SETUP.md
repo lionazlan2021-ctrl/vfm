@@ -102,10 +102,16 @@ Now open `.env` in any text editor (Notepad, TextEdit, VS Code) and:
 ### 2.6 Set up the local database
 In the terminal, type:
 ```
-npx prisma migrate dev --name init
+npm run db:setup
 ```
 This creates a small database file on your computer so signup/login/saved
 products work. You'll see it create some files — that's expected.
+
+> No Anthropic key yet, or want to avoid spending anything while you look
+> around? Set `VFM_MOCK_SEARCH=1` in `.env`. Searches then return fixed example
+> results instantly and for free — everything else (signup, saving, history,
+> chat) still works. See "Working on the site without spending money" near the
+> end of this file.
 
 ### 2.7 Run the website on your computer
 ```
@@ -178,20 +184,51 @@ real cloud database. The easiest free option:
    ```
 4. Copy that entire string
 5. Back in Vercel's environment variables (step 3.3), set `DATABASE_URL` to this value
-6. Open `prisma/schema.prisma` in your local project and change:
+
+Now switch the project over to Postgres. **Follow all four steps** — changing
+only the provider line is not enough, and step 3.4b is the one people miss.
+
+**3.4a — Change the database type.** Open `prisma/schema.prisma` and change:
+```
+provider = "sqlite"
+```
+to:
+```
+provider = "postgresql"
+```
+
+**3.4b — Rebuild the migration files for Postgres.**
+
+The files in `prisma/migrations/` were written for SQLite and use SQLite-only
+types (`DATETIME`, which Postgres does not have). Handing them to Postgres fails
+with a syntax error. You need to regenerate them:
+
+1. Delete the whole `prisma/migrations` folder.
+   - **Mac/Linux:** `rm -rf prisma/migrations`
+   - **Windows:** delete the folder in File Explorer
+2. In your local `.env`, temporarily change `DATABASE_URL` to the **Neon/Supabase
+   connection string** you copied above (keep a note of the old `file:./dev.db`
+   value if you want to go back to local development later).
+3. Run:
    ```
-   provider = "sqlite"
+   npx prisma migrate dev --name init
    ```
-   to:
-   ```
-   provider = "postgresql"
-   ```
-7. Save, then commit and push this change:
-   ```
-   git add .
-   git commit -m "Switch to Postgres for production"
-   git push
-   ```
+   This writes fresh Postgres-flavoured migration files **and** creates the
+   tables in your real database at the same time. That means step 3.6 below is
+   already done.
+
+**3.4c — Put your local database setting back** (optional, but it lets you keep
+developing locally): change `DATABASE_URL` in `.env` back to
+`file:./dev.db`. Note that with the provider now set to `postgresql`, local
+SQLite development no longer works — see "Going back to local development"
+at the end of this file if you need it.
+
+**3.4d — Commit and push:**
+```
+git add .
+git commit -m "Switch to Postgres for production"
+git push
+```
 
 ### 3.5 Deploy
 Back on the Vercel import screen (or the project dashboard if you already
@@ -201,15 +238,25 @@ Vercel will build your project. This takes 1–3 minutes. Watch the log — if i
 finishes with a green checkmark, you're live.
 
 ### 3.6 Set up the production database tables
-The database is empty until you create the tables in it. From your local
-terminal, with `DATABASE_URL` in your `.env` temporarily set to the **same
-Neon/Supabase connection string** you used in Vercel, run:
+
+**If you followed step 3.4b, this is already done** — `prisma migrate dev`
+created the tables (User, Search, SavedProduct, TrackedProduct) at the same time
+as it wrote the migration files. You can skip to 3.7.
+
+To confirm, or if you skipped it: with `DATABASE_URL` in your local `.env`
+temporarily set to the Neon/Supabase connection string, run:
 ```
 npx prisma migrate deploy
 ```
-This creates the actual tables (User, Search, SavedProduct, etc.) in your real
-production database. You only need to do this once (and again any time you
-change `schema.prisma` in the future).
+This applies any migrations the database doesn't have yet. It is safe to run
+more than once — already-applied migrations are skipped.
+
+From now on, any time you change `prisma/schema.prisma`, run
+`npx prisma migrate dev --name describe-your-change` locally, then commit the new
+file in `prisma/migrations/` and push. Vercel applies it on the next deploy.
+
+> **If you get `type "DATETIME" does not exist`,** the old SQLite migration files
+> are still in `prisma/migrations/`. Go back and do step 3.4b.
 
 ### 3.7 Visit your live site
 Vercel gives you a URL like `https://vfm-website-yourname.vercel.app`. Open it
@@ -248,6 +295,55 @@ payment method on file or you've hit a spending limit.
 **Changes I make locally don't show up on the live site**
 → You need to `git push` your changes. Vercel automatically redeploys every
 time you push to the `main` branch on GitHub.
+
+**"The AI service isn't configured yet"**
+→ Your `ANTHROPIC_API_KEY` is missing or still the placeholder. Changes to
+`.env` only take effect after restarting the server (Ctrl+C, then `npm run dev`).
+If you just want to look at the site without a key, set `VFM_MOCK_SEARCH=1`
+instead — see below.
+
+**Search results look identical every time / mention "sample data"**
+→ `VFM_MOCK_SEARCH=1` is set in your `.env`. That's the offline sample mode.
+Set it to `0` and restart to get live results.
+
+**"Search limit reached" when I've only done a few searches**
+→ That's the built-in rate limit protecting your API bill: 5 searches per hour
+for logged-out visitors, 30 for logged-in accounts. Log in, or wait an hour.
+The numbers live in `LIMITS` in `lib/rate-limit.ts` if you want to change them.
+
+**`type "DATETIME" does not exist` when setting up the production database**
+→ The SQLite migration files are still present. See step 3.4b.
+
+---
+
+## Going back to local development after switching to Postgres
+
+Once `prisma/schema.prisma` says `provider = "postgresql"`, the local SQLite
+file no longer works — Prisma needs the provider to match the database. Two
+options:
+
+- **Simplest:** keep using the cloud database for local development too. Leave
+  `DATABASE_URL` in your local `.env` set to the Neon/Supabase string. Your local
+  and live sites then share one database, so test accounts show up on both.
+- **Keep them separate:** create a second free Neon project (e.g. "vfm-dev") and
+  point your local `.env` at that one instead. Your live site keeps its own data.
+
+Switching the provider line back to `sqlite` also works, but then you'd have to
+regenerate the migration files again — it isn't worth it once you're live.
+
+---
+
+## Working on the site without spending money
+
+Every AI search costs a small amount on your Anthropic account. While you're
+changing the design or testing signup and saving, you can turn the AI off:
+
+1. In `.env`, set `VFM_MOCK_SEARCH=1`
+2. Restart the server (Ctrl+C, then `npm run dev`)
+
+Searches now return the same fixed example results instantly, at no cost. Every
+other feature still works normally. Set it back to `0` when you want real
+results — and make sure it is `0` (or absent) in Vercel.
 
 ---
 

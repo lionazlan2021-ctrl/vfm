@@ -32,7 +32,7 @@ export default function LoadingView({ query }: { query: string }) {
           {LOAD_STEPS[step]}
         </div>
         <div className="text-[11px]" style={{ color: "#3d5542" }}>
-          "{query}"
+          &ldquo;{query}&rdquo;
         </div>
         <div className="flex justify-center gap-1.5 mt-3">
           {LOAD_STEPS.map((_, i) => (

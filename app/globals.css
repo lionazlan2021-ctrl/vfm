@@ -32,6 +32,28 @@ body {
   color: #3d5542;
 }
 
+/* Keyboard focus must be visible everywhere. Scoped to :focus-visible so it
+   appears for keyboard users without ringing every mouse click. */
+:focus-visible {
+  outline: 2px solid #2dbe5f;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Visually hidden, but still announced by screen readers. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+
 /* Scroll-triggered reveal animation, toggled by IntersectionObserver in components */
 .reveal {
   opacity: 0;
@@ -58,10 +80,16 @@ body {
   50% { opacity: 0; }
 }
 
+/* Jade, to match the elements it is actually used on (voice buttons, the chat
+   status dot). It was previously red, which read as an error state. */
 @keyframes pulseRing {
-  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
-  70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(45, 190, 95, 0.5); }
+  70% { box-shadow: 0 0 0 8px rgba(45, 190, 95, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(45, 190, 95, 0); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 @keyframes toastIn {
@@ -142,4 +170,24 @@ body {
 .sidebar-link.active {
   background: rgba(45, 190, 95, 0.11);
   color: #2dbe5f;
+}
+
+/* Respect a reduced-motion preference. This UI leans on animation heavily
+   (reveals, shimmer, typewriter, pulses), which can be uncomfortable.
+   Must stay last in the file so it overrides the rules above. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
 }

@@ -2,13 +2,20 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "VFM.com — Value For Money | AI Shopping Price Comparison",
+  title: "VFM — is it actually worth the money?",
   description:
-    "VFM.com uses real-time AI search to find the best prices for any product across Amazon, Best Buy, Walmart, and more. Compare sellers, check value-for-money scores, and shop smarter.",
-  keywords: ["price comparison", "AI shopping assistant", "value for money", "best price finder", "product comparison"],
+    "Compare the same product across three real sellers, weighed on condition, seller trust, shipping, warranty and delivery — not just price. VFM tells you which listing deserves your money, and why.",
+  keywords: [
+    "price comparison",
+    "value for money",
+    "product comparison",
+    "best price finder",
+    "AI shopping assistant",
+  ],
   openGraph: {
-    title: "VFM.com — Value For Money",
-    description: "AI-powered real-time price comparison across trusted online sellers.",
+    title: "VFM — is it actually worth the money?",
+    description:
+      "The cheapest price is rarely the best value. VFM compares three sellers on condition, trust, shipping and warranty, then says which one to buy.",
     type: "website",
   },
   robots: { index: true, follow: true },

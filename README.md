@@ -76,17 +76,57 @@ chat — so you can develop and demo the whole flow offline. Set it back to `0`
 | `npm run check` | typecheck + lint + tests — run this before pushing |
 | `npm run db:setup` | Create/update the local database from the schema |
 | `npm run prisma:studio` | Browse the database in a GUI |
+| `npm run plan:set -- <email> <plan>` | Move an account onto free / pro / premium |
+
+> Don't run `npm run build` while `npm run dev` is running — they share
+> `.next/`, and the production build leaves the dev server unable to resolve its
+> chunks (`Cannot find module './681.js'`). If that happens, stop the server,
+> `rm -rf .next`, and start it again.
 
 **TESTING.md** has a manual checklist covering every user-facing flow.
 
+## Plans
+
+Three tiers, defined in one place (`lib/plans.ts`). A plan controls which model
+runs the search, how much reasoning effort it spends, and the monthly allowance:
+
+| | Free | Pro | Premium |
+|---|---|---|---|
+| Price | $0 | $12/mo | $29/mo |
+| Searches | 15/month | 200/month | 1,000/month |
+| Model | `claude-sonnet-5` | `claude-opus-4-8` | `claude-opus-5` |
+| Reasoning effort | medium | high | xhigh |
+| Follow-up chat | 20/hour | 60/hour | 200/hour |
+
+Opus 4.8 and Opus 5 cost the same per token, so the gap between Pro and Premium
+is deliberately quota and effort, not just the model name.
+
+**Billing is not connected.** The `plan` column on `User` is real and enforced,
+but nothing collects payment — the pricing page says so rather than showing a
+button that pretends to charge. Everyone starts on Free. To move an account:
+
+```bash
+npm run plan:set -- someone@example.com pro
+```
+
+The change applies on the next request; there's no need to log out. The plan is
+read from the database rather than the session cookie precisely so that holds.
+When Stripe is added, its webhook writes the same column and nothing else needs
+to change.
+
+Quota is counted from the `Search` table over the current UTC calendar month, so
+the number shown to a user is derived from the same rows that back their history
+— there's no second counter to drift.
+
 ## Rate limits
 
-Search and chat cost real money per call, so both are metered (`lib/rate-limit.ts`):
+On top of the monthly quota, per-hour limits protect against bursts
+(`lib/rate-limit.ts`):
 
 | Endpoint | Anonymous | Signed in |
 |---|---|---|
-| `POST /api/search` | 5 / hour per IP | 30 / hour per account |
-| `POST /api/chat` | not allowed — login required | 40 / hour per account |
+| `POST /api/search` | 5 / hour per IP | 30 / hour per account, plus the plan's monthly quota |
+| `POST /api/chat` | not allowed — login required | per plan (20–200 / hour) |
 | Auth endpoints | 10 / 15 min per IP | — |
 
 Counters live in the memory of a single server process. On a platform that runs
@@ -108,14 +148,44 @@ Search also handles two responses the API can return that are easy to miss:
 `pause_turn` (the web-search loop paused and must be resumed — otherwise you get
 a truncated, unparseable answer) and `refusal`.
 
+## Design
+
+The visual language follows a supplied reference (Daylight's site) adapted to
+this product. Warm paper, a single disciplined accent, editorial composition.
+
+| Role | Token | Value |
+|---|---|---|
+| Page | `--paper` | `#fbf7ef` |
+| Panels | `--panel` | `#f2ece0` |
+| Ink | `--ink` | `#17190f` |
+| Accent | `--accent` | `#1f6f43` |
+| Condition flag | `--flag` | `#9a6510` |
+
+The reference's accent is amber; ours is a deep banknote green, because this
+product is about money and the accent has to read as *value*. Amber is kept as a
+narrow secondary, used only to flag non-new condition and middling scores — so
+when you see green, it means good value, and nothing else.
+
+Type is three faces with distinct jobs: **Fraunces** (serif) for display and
+prices, **Inter Tight** for body and UI, **JetBrains Mono** for eyebrow labels,
+data and scores. All tokens live in `app/globals.css` and are mirrored into
+`tailwind.config.js` — edit the CSS, not the Tailwind file.
+
+Deliberate constraints, from the project's design standards: no emoji as UI
+chrome, no gradient-filled headline words, no glassmorphism, no badge clutter,
+no centred-everything layout. Motion is one orchestrated reveal
+(`components/Reveal.tsx`), which is written so content is visible by default and
+can never be stranded invisible if the observer doesn't fire.
+
 ## Project structure
 
 ```
 app/
   page.tsx                  — main app shell (client component)
+  pricing/page.tsx          — plans and pricing (server component)
   layout.tsx                — root layout + SEO metadata
   error.tsx / not-found.tsx — error and 404 boundaries
-  globals.css               — global styles, animations
+  globals.css               — design tokens, global styles
   api/
     search/route.ts         — POST: AI product search (live web search)
     chat/route.ts           — POST: AI follow-up chat (login required)
@@ -128,12 +198,16 @@ components/                 — all UI components (cards, chat, sidebar, etc.)
 lib/
   ai.ts                     — Anthropic integration, prompts, response schema
   mock-search.ts            — sample results for VFM_MOCK_SEARCH=1
+  plans.ts                  — tier definitions (model, effort, quotas, price)
+  usage.ts                  — monthly quota accounting
   auth.ts                   — password hashing + JWT sessions
   http.ts / errors.ts       — shared API error shape and request validation
   rate-limit.ts             — per-user / per-IP limits
   listing-collection.ts     — shared implementation for saved + tracked
   api-client.ts             — browser fetch wrapper
   prisma.ts                 — Prisma client singleton
+scripts/
+  set-plan.mjs              — move an account onto a plan (no billing yet)
 prisma/
   schema.prisma             — database schema
   migrations/               — committed migration history

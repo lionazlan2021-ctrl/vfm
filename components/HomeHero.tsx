@@ -1,44 +1,64 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import Reveal from "./Reveal";
 import ImgThumb from "./ImgThumb";
 
-const HERO_LINES = ["Value For Money.", "Price vs. Quality.", "Smart Buying.", "Real Savings."];
-const TRUSTED = ["Amazon", "Best Buy", "Walmart", "Noon", "eBay", "B&H Photo", "Newegg", "AliExpress"];
+/** Named because we actually search these — not decorative trust badges. */
+const SELLERS = [
+  "Amazon",
+  "Best Buy",
+  "Walmart",
+  "Target",
+  "Newegg",
+  "B&H Photo",
+  "eBay",
+  "Noon",
+  "AliExpress",
+];
 
-export default function HomeHero({ onSearch }: { onSearch: (q: string, file?: File | null) => void }) {
+const HOW_IT_WORKS = [
+  {
+    step: "Step 1",
+    title: "Name the product",
+    body: "Type a model, or photograph the box. We identify the exact variant — size, capacity, colourway — before looking at a single price.",
+  },
+  {
+    step: "Step 2",
+    title: "We read the market",
+    body: "A live web search pulls current listings from three different sellers, with their real condition, shipping cost, delivery window and warranty terms.",
+  },
+  {
+    step: "Step 3",
+    title: "We say which is worth it",
+    body: "Each listing gets a value score out of ten and a stated reason. A cheap refurbished unit with a 90-day warranty does not beat a new one for the sake of being cheap.",
+  },
+];
+
+export default function HomeHero({
+  onSearch,
+}: {
+  onSearch: (q: string, file?: File | null) => void;
+}) {
   const [query, setQuery] = useState("");
   const [imgFile, setImgFile] = useState<File | null>(null);
-  const [lineIdx, setLineIdx] = useState(0);
-  const [fade, setFade] = useState(true);
   const [voiceOn, setVoiceOn] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const recogRef = useRef<any>(null);
+  const recogRef = useRef<{ stop: () => void } | null>(null);
 
-  useEffect(() => {
-    const t = setInterval(() => {
-      setFade(false);
-      setTimeout(() => {
-        setLineIdx((i) => (i + 1) % HERO_LINES.length);
-        setFade(true);
-      }, 380);
-    }, 3000);
-    return () => clearInterval(t);
-  }, []);
-
-  const go = (q?: string, f?: File | null) => {
-    const sq = q ?? query;
-    if (!sq.trim() && !f && !imgFile) return;
-    onSearch(sq, f || imgFile);
+  const submit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!query.trim() && !imgFile) return;
+    onSearch(query, imgFile);
   };
 
   const toggleVoice = () => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) {
-      alert("Voice search isn't supported in this browser. Try Chrome or Edge.");
-      return;
-    }
+    const w = window as unknown as {
+      SpeechRecognition?: new () => SpeechLike;
+      webkitSpeechRecognition?: new () => SpeechLike;
+    };
+    const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!SR) return;
     if (voiceOn) {
       recogRef.current?.stop();
       setVoiceOn(false);
@@ -48,7 +68,8 @@ export default function HomeHero({ onSearch }: { onSearch: (q: string, file?: Fi
     r.lang = "en-US";
     r.interimResults = true;
     r.continuous = false;
-    r.onresult = (e: any) => setQuery(Array.from(e.results).map((x: any) => x[0].transcript).join(""));
+    r.onresult = (e) =>
+      setQuery(Array.from(e.results).map((x) => x[0].transcript).join(""));
     r.onend = () => setVoiceOn(false);
     r.onerror = () => setVoiceOn(false);
     r.start();
@@ -57,122 +78,192 @@ export default function HomeHero({ onSearch }: { onSearch: (q: string, file?: Fi
   };
 
   return (
-    <div className="max-w-[680px] mx-auto px-6 pt-16 pb-20">
-      <Reveal>
-        <div className="text-center mb-5">
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1 text-[11px] font-medium"
-            style={{ background: "rgba(45,190,95,0.05)", border: "1px solid rgba(45,190,95,0.22)", color: "#2dbe5f" }}
-          >
-            ✦ Real-Time AI Price Search
-          </span>
-        </div>
-      </Reveal>
+    <div className="pb-24">
+      {/* Hero — asymmetric, weighted left. The thesis is the sentence, not a slogan. */}
+      <section className="px-5 md:px-10 lg:px-16 pt-14 md:pt-24">
+        <Reveal>
+          <div className="grid lg:grid-cols-12 gap-10 items-end">
+            <div className="lg:col-span-7">
+              <p className="eyebrow mb-5">Value for money</p>
+              {/* No hard line breaks — a fixed measure lets it wrap cleanly at
+                  any width instead of breaking in the wrong place. */}
+              <h1
+                className="display"
+                style={{
+                  fontSize: "clamp(2.4rem, 5.6vw, 4.5rem)",
+                  color: "var(--ink)",
+                  maxWidth: "13ch",
+                }}
+              >
+                The cheapest price is rarely the{" "}
+                <span style={{ color: "var(--accent)" }}>best value.</span>
+              </h1>
+            </div>
 
-      <Reveal delay={0.05}>
-        <h1
-          className="text-center font-extrabold leading-[1.06] mb-3.5"
-          style={{ fontFamily: "Bricolage Grotesque, sans-serif", fontSize: "clamp(2.2rem,5.5vw,3.8rem)", letterSpacing: "-0.03em" }}
-        >
-          Find the Best Price.
-          <br />
-          <span style={{ color: "#2dbe5f", opacity: fade ? 1 : 0, transition: "opacity .35s ease" }}>{HERO_LINES[lineIdx]}</span>
-        </h1>
-      </Reveal>
-
-      <Reveal delay={0.1}>
-        <p className="text-center text-sm leading-loose max-w-[440px] mx-auto mb-10" style={{ color: "#8aaa8e" }}>
-          Search any product. VFM AI searches the live web for the same item across Amazon, Best Buy, Walmart, and more — ranked by real value.
-        </p>
-      </Reveal>
-
-      <Reveal delay={0.15}>
-        <div
-          className="flex items-center gap-2.5 rounded-[20px] py-[5px] pr-[5px] pl-[18px]"
-          style={{
-            background: "#111815",
-            border: "1.5px solid rgba(45,190,95,0.09)",
-            boxShadow: "0 0 60px rgba(45,190,95,0.05)",
-            animation: "glowBreath 5s 2s ease-in-out infinite",
-          }}
-        >
-          {imgFile ? <ImgThumb file={imgFile} onRemove={() => setImgFile(null)} /> : <span className="text-base flex-shrink-0">🔍</span>}
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && go()}
-            placeholder={imgFile ? "Add context (optional)…" : "e.g. iPhone 15 Pro 256GB, Sony WH-1000XM5…"}
-            className="flex-1 bg-transparent border-none outline-none text-sm py-3 min-w-0"
-            style={{ color: "#ddeede" }}
-          />
-          <button
-            onClick={toggleVoice}
-            title="Voice search"
-            className="rounded-[10px] px-2.5 py-2 text-sm flex-shrink-0 transition-all"
-            style={{
-              background: voiceOn ? "#2dbe5f22" : "none",
-              border: `1px solid ${voiceOn ? "#2dbe5f60" : "rgba(45,190,95,0.09)"}`,
-              color: voiceOn ? "#2dbe5f" : "#3d5542",
-              animation: voiceOn ? "pulseRing 1.2s infinite" : "none",
-            }}
-          >
-            🎙️
-          </button>
-          <button
-            onClick={() => fileRef.current?.click()}
-            title="Upload product image"
-            className="rounded-[10px] px-2.5 py-2 text-sm flex-shrink-0"
-            style={{ background: "none", border: "1px solid rgba(45,190,95,0.09)", color: "#3d5542" }}
-          >
-            📸
-          </button>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => setImgFile(e.target.files?.[0] || null)} />
-          <button onClick={() => go()} disabled={!query.trim() && !imgFile} className="btn-jade rounded-[14px] px-5.5 py-2.5">
-            Compare ↗
-          </button>
-        </div>
-        {imgFile && (
-          <div className="text-center text-[11px] mt-2" style={{ color: "#2dbe5f" }}>
-            📸 AI will identify this product and compare prices
+            <div className="lg:col-span-5 lg:pb-3">
+              <p
+                className="text-[15px] leading-relaxed max-w-prose"
+                style={{ color: "var(--ink-soft)" }}
+              >
+                Search any product and we compare the same item across three real
+                sellers — weighing condition, seller trust, shipping, warranty and
+                delivery against the asking price. Then we tell you which one
+                actually deserves your money, and why.
+              </p>
+            </div>
           </div>
-        )}
-      </Reveal>
+        </Reveal>
 
-      <Reveal delay={0.2}>
-        <div className="mt-5 text-center">
-          <div className="text-[10px] tracking-wider uppercase mb-2.5" style={{ color: "#3d5542" }}>
-            Searches across
-          </div>
-          <div className="flex flex-wrap justify-center gap-1.5">
-            {TRUSTED.map((s) => (
-              <span key={s} className="rounded-full px-2.5 py-1 text-[11px]" style={{ background: "rgba(45,190,95,0.05)", border: "1px solid rgba(45,190,95,0.09)", color: "#8aaa8e" }}>
-                {s}
-              </span>
+        {/* Search — the primary action, given room to breathe. */}
+        <Reveal delay={0.08}>
+          <form onSubmit={submit} className="mt-11 max-w-3xl">
+            <label htmlFor="hero-search" className="sr-only">
+              Product to compare
+            </label>
+            <div
+              className="flex items-center gap-2 p-2 rounded-2xl"
+              style={{ background: "var(--paper)", border: "1px solid var(--rule-strong)" }}
+            >
+              {imgFile && <ImgThumb file={imgFile} onRemove={() => setImgFile(null)} />}
+              <input
+                id="hero-search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={
+                  imgFile ? "Add any detail that narrows it down…" : "Sony WH-1000XM5, iPhone 15 Pro 256GB…"
+                }
+                className="flex-1 bg-transparent border-none outline-none text-[15px] px-3 py-2.5 min-w-0"
+                style={{ color: "var(--ink)" }}
+              />
+
+              <button
+                type="button"
+                onClick={toggleVoice}
+                aria-pressed={voiceOn}
+                aria-label={voiceOn ? "Stop voice input" : "Search by voice"}
+                className="btn-quiet"
+                style={{
+                  padding: "9px 12px",
+                  minWidth: 44,
+                  minHeight: 44,
+                  borderColor: voiceOn ? "var(--accent)" : undefined,
+                  color: voiceOn ? "var(--accent)" : undefined,
+                }}
+              >
+                <MicIcon />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                aria-label="Search by photo"
+                className="btn-quiet"
+                style={{ padding: "9px 12px", minWidth: 44, minHeight: 44 }}
+              >
+                <CameraIcon />
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                className="hidden"
+                onChange={(e) => setImgFile(e.target.files?.[0] || null)}
+              />
+
+              <button
+                type="submit"
+                disabled={!query.trim() && !imgFile}
+                className="btn"
+                style={{ minHeight: 44 }}
+              >
+                Compare
+              </button>
+            </div>
+
+            <p className="eyebrow mt-4">
+              {imgFile ? "We'll identify the product from your photo" : `Searches ${SELLERS.length} sellers`}
+            </p>
+          </form>
+        </Reveal>
+      </section>
+
+      {/* How it works — the reference's step rhythm: mono eyebrow, serif heading,
+          short body, alternating alignment. */}
+      <section className="mt-24 md:mt-32 px-5 md:px-10 lg:px-16">
+        <div className="panel px-6 md:px-12 py-14 md:py-20">
+          <div className="grid gap-14 md:gap-20">
+            {HOW_IT_WORKS.map((s, i) => (
+              <Reveal key={s.step} delay={0.05 * i}>
+                <div className="grid lg:grid-cols-12 gap-5 lg:gap-10">
+                  <div className="lg:col-span-5">
+                    <p className="eyebrow mb-4">{s.step}</p>
+                    <h2
+                      className="display"
+                      style={{ fontSize: "clamp(1.7rem, 3vw, 2.4rem)", color: "var(--ink)" }}
+                    >
+                      {s.title}
+                    </h2>
+                  </div>
+                  <div className="lg:col-span-6 lg:col-start-7">
+                    <p
+                      className="text-[15px] leading-relaxed max-w-prose"
+                      style={{ color: "var(--ink-soft)" }}
+                    >
+                      {s.body}
+                    </p>
+                  </div>
+                </div>
+              </Reveal>
             ))}
           </div>
         </div>
-      </Reveal>
+      </section>
 
-      <div className="grid gap-3 mt-14" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
-        {[
-          { icon: "🔍", title: "Live Web Search", desc: "Real Claude AI search across the open web, not cached data" },
-          { icon: "📸", title: "Image Recognition", desc: "Upload a photo — AI identifies it and finds live prices" },
-          { icon: "💬", title: "Conversational Memory", desc: "Follow-up questions stay in context for the whole session" },
-          { icon: "💳", title: "Live Payment Plans", desc: "Real installment math from the actual listing price" },
-        ].map((f, i) => (
-          <Reveal key={f.title} delay={0.25 + i * 0.06}>
-            <div className="card-hover rounded-[14px] p-4" style={{ background: "#111815", border: "1px solid rgba(45,190,95,0.09)" }}>
-              <div className="text-[22px] mb-2">{f.icon}</div>
-              <div className="text-xs font-semibold mb-1" style={{ color: "#ddeede" }}>
-                {f.title}
-              </div>
-              <div className="text-[11px] leading-relaxed" style={{ color: "#3d5542" }}>
-                {f.desc}
-              </div>
-            </div>
-          </Reveal>
-        ))}
-      </div>
+      {/* Where we look — plain text, not a badge wall. */}
+      <section className="mt-20 px-5 md:px-10 lg:px-16">
+        <Reveal>
+          <div className="grid lg:grid-cols-12 gap-6 items-baseline">
+            <p className="eyebrow lg:col-span-3">Sellers we search</p>
+            <p
+              className="lg:col-span-9 text-[15px] leading-relaxed"
+              style={{ color: "var(--ink-soft)" }}
+            >
+              {SELLERS.join(" · ")}
+            </p>
+          </div>
+        </Reveal>
+      </section>
     </div>
   );
 }
+
+/* Line icons rather than emoji — the design standards ban emoji as UI chrome. */
+
+function MicIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v4" />
+    </svg>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2L8 5h8l1.5 2h2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z" />
+      <circle cx="12" cy="13" r="3.2" />
+    </svg>
+  );
+}
+
+type SpeechLike = {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void;
+  onend: () => void;
+  onerror: () => void;
+  start: () => void;
+  stop: () => void;
+};

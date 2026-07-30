@@ -26,6 +26,11 @@ model User {
   name         String
   createdAt    DateTime @default(now())
 
+  /// Subscription tier: "free" | "pro" | "premium". See lib/plans.ts.
+  /// Billing is not wired up — this is set manually (or by a future Stripe
+  /// webhook). Anything unrecognised is treated as "free".
+  plan String @default("free")
+
   searches Search[]
   saved    SavedProduct[]
   tracked  TrackedProduct[]

@@ -10,8 +10,7 @@ import type { User, ApiErrorBody } from "@/types";
  *   - Escape closes it, and focus returns to whatever opened it.
  *   - Tab is trapped inside the dialog while it is open.
  *   - It is a real <form>, so Enter submits from any field.
- *   - Every input has a matching <label> and an autoComplete hint so password
- *     managers can fill it.
+ *   - Every input has a matching <label> and an autoComplete hint.
  *   - Errors are announced via role="alert".
  */
 export default function AuthModal({
@@ -30,7 +29,6 @@ export default function AuthModal({
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
-  // Remembered so focus can go back where it came from on close.
   const openerRef = useRef<HTMLElement | null>(null);
 
   const ids = useId();
@@ -50,7 +48,6 @@ export default function AuthModal({
     firstFieldRef.current?.focus();
   }, []);
 
-  // Escape to dismiss, Tab cycled within the dialog.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -123,16 +120,10 @@ export default function AuthModal({
     }
   };
 
-  const inputStyle = {
-    background: "#0f1410",
-    border: "1px solid rgba(45,190,95,0.09)",
-    color: "#ddeede",
-  } as const;
-
   return (
     <div
       className="fixed inset-0 z-[999] flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,.6)", animation: "fadeIn .2s ease" }}
+      style={{ background: "rgba(23,25,15,.36)", animation: "fadeIn .2s ease" }}
       onClick={close}
     >
       <div
@@ -141,106 +132,111 @@ export default function AuthModal({
         aria-modal="true"
         aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
-        className="rounded-[18px] p-6 w-full max-w-[340px]"
+        className="w-full max-w-[380px] p-7"
         style={{
-          background: "#111815",
-          border: "1px solid rgba(45,190,95,0.09)",
-          animation: "fadeUp .25s ease",
+          background: "var(--paper)",
+          border: "1px solid var(--rule-strong)",
+          borderRadius: "var(--radius-card)",
+          animation: "riseIn .25s ease both",
         }}
       >
-        <div className="flex justify-between items-center mb-4">
-          <h2 id={titleId} className="text-base font-bold" style={{ color: "#ddeede" }}>
-            {mode === "login" ? "Log in" : "Sign up"}
-          </h2>
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            <p className="eyebrow mb-2">{mode === "login" ? "Welcome back" : "Get started"}</p>
+            <h2 id={titleId} className="display text-[26px]" style={{ color: "var(--ink)" }}>
+              {mode === "login" ? "Log in" : "Create an account"}
+            </h2>
+          </div>
           <button
             type="button"
             onClick={close}
             aria-label="Close dialog"
-            className="text-base leading-none px-1"
-            style={{ color: "#3d5542", background: "none", border: "none" }}
+            className="-mr-2 -mt-1 flex items-center justify-center"
+            style={{ minWidth: 40, minHeight: 40, color: "var(--ink-mute)", background: "none", border: "none" }}
           >
-            ✕
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
           </button>
         </div>
 
-        <form onSubmit={submit} noValidate>
+        <form onSubmit={submit} noValidate className="space-y-3">
           {mode === "signup" && (
-            <>
-              <label htmlFor={nameId} className="sr-only">
-                Full name
+            <div>
+              <label htmlFor={nameId} className="eyebrow block mb-1.5" style={{ fontSize: 10 }}>
+                Name
               </label>
               <input
                 id={nameId}
                 ref={mode === "signup" ? firstFieldRef : undefined}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Full name"
                 autoComplete="name"
-                className="w-full rounded-[10px] px-3 py-2.5 text-[13px] mb-2.5"
-                style={inputStyle}
+                className="field"
               />
-            </>
-          )}
-
-          <label htmlFor={emailId} className="sr-only">
-            Email address
-          </label>
-          <input
-            id={emailId}
-            ref={mode === "login" ? firstFieldRef : undefined}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email address"
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            aria-invalid={Boolean(err) || undefined}
-            aria-describedby={err ? errorId : undefined}
-            className="w-full rounded-[10px] px-3 py-2.5 text-[13px] mb-2.5"
-            style={inputStyle}
-          />
-
-          <label htmlFor={pwId} className="sr-only">
-            Password
-          </label>
-          <input
-            id={pwId}
-            value={pw}
-            onChange={(e) => setPw(e.target.value)}
-            type="password"
-            placeholder="Password (min. 8 characters)"
-            autoComplete={mode === "login" ? "current-password" : "new-password"}
-            aria-invalid={Boolean(err) || undefined}
-            aria-describedby={err ? errorId : undefined}
-            className="w-full rounded-[10px] px-3 py-2.5 text-[13px] mb-2.5"
-            style={inputStyle}
-          />
-
-          {err && (
-            <div id={errorId} role="alert" className="text-[11px] mb-2.5" style={{ color: "#fca5a5" }}>
-              ⚠️ {err}
             </div>
           )}
 
-          <button type="submit" disabled={loading} className="btn-jade w-full mb-2.5">
+          <div>
+            <label htmlFor={emailId} className="eyebrow block mb-1.5" style={{ fontSize: 10 }}>
+              Email
+            </label>
+            <input
+              id={emailId}
+              ref={mode === "login" ? firstFieldRef : undefined}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              aria-invalid={Boolean(err) || undefined}
+              aria-describedby={err ? errorId : undefined}
+              className="field"
+            />
+          </div>
+
+          <div>
+            <label htmlFor={pwId} className="eyebrow block mb-1.5" style={{ fontSize: 10 }}>
+              Password
+            </label>
+            <input
+              id={pwId}
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+              type="password"
+              placeholder="At least 8 characters"
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              aria-invalid={Boolean(err) || undefined}
+              aria-describedby={err ? errorId : undefined}
+              className="field"
+            />
+          </div>
+
+          {err && (
+            <p id={errorId} role="alert" className="text-[12.5px]" style={{ color: "#a33" }}>
+              {err}
+            </p>
+          )}
+
+          <button type="submit" disabled={loading} className="btn w-full" style={{ marginTop: 8 }}>
             {loading ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}
           </button>
         </form>
 
-        <div className="text-center text-xs" style={{ color: "#3d5542" }}>
-          {mode === "login" ? "No account?" : "Already registered?"}{" "}
+        <p className="text-center text-[13px] mt-5" style={{ color: "var(--ink-mute)" }}>
+          {mode === "login" ? "No account yet?" : "Already have an account?"}{" "}
           <button
             type="button"
             onClick={() => {
               setMode(mode === "login" ? "signup" : "login");
               setErr("");
             }}
-            className="text-xs underline"
-            style={{ color: "#2dbe5f", background: "none", border: "none" }}
+            className="underline"
+            style={{ color: "var(--accent)", background: "none", border: "none" }}
           >
             {mode === "login" ? "Sign up" : "Log in"}
           </button>
-        </div>
+        </p>
       </div>
     </div>
   );

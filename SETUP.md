@@ -332,6 +332,30 @@ regenerate the migration files again — it isn't worth it once you're live.
 
 ---
 
+## Plans, and how to put someone on a paid one
+
+The site has three tiers — Free, Pro and Premium — and they are real: each one
+decides which AI model runs the search, how carefully it thinks, and how many
+searches that account gets per month. You can see them at `/pricing`.
+
+**What is not built is the payment step.** Nothing on the site takes money, so
+everyone who signs up is on Free. That's deliberate — a checkout button that
+didn't charge anything would be worse than none at all.
+
+To move an account onto a paid plan yourself (for a friend, a tester, or you):
+
+```
+npm run plan:set -- their@email.com pro
+```
+
+Use `free`, `pro` or `premium`. The change takes effect on their next click —
+they don't need to log out. To put someone back: `npm run plan:set -- their@email.com free`.
+
+If you later add Stripe, its webhook writes to the same place, and everything
+above keeps working.
+
+---
+
 ## Working on the site without spending money
 
 Every AI search costs a small amount on your Anthropic account. While you're

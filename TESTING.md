@@ -18,6 +18,7 @@ no API key needed — these are pure-function tests and finish in about a second
 |---|---|
 | `tests/ai.test.ts` | Chat history trimming, JSON extraction from model output, the response schema, image-type validation, and the mock fixture |
 | `tests/rate-limit.test.ts` | Limit enforcement, per-key isolation, window reset, caller identification, response headers |
+| `tests/plans.test.ts` | Plan lookup and fallback, ladder invariants (price/quota/effort all increase), quota period boundaries |
 
 Three of these guard bugs that were live in the first build, so they are worth
 keeping rather than deleting if they ever start failing:
@@ -55,7 +56,8 @@ npm run db:setup && npm run dev
 ### 1. First load
 - [ ] Home page loads with no console errors
 - [ ] Sidebar shows "Log in to keep your search history."
-- [ ] The loading spinner rotates when a search is running
+- [ ] The hero headline is fully visible immediately (it must never render blank)
+- [ ] Type is warm cream with serif headlines — not the old dark theme
 
 ### 2. Signup
 - [ ] "Log in / Sign up" opens the dialog with focus in the first field
@@ -72,11 +74,11 @@ npm run db:setup && npm run dev
 
 ### 4. Text search
 - [ ] Search "Sony WH-1000XM5" — three cards appear from three different stores
-- [ ] Exactly one card carries the **✦ VFM PICK** badge
+- [ ] Exactly one card carries the **Best value** badge
 - [ ] That badge is on the listing matching `recommendation`, which is **not always the first card**
 - [ ] Value-for-money bars show a score and never overflow their track
-- [ ] A listing with no link shows "No direct link found" instead of a dead button
-- [ ] "Show Full Comparison Table" expands and scrolls sideways on a narrow screen without moving the page
+- [ ] A listing with no link shows "No direct link" instead of a dead button
+- [ ] "Compare every detail side by side" expands, and the table scrolls sideways on a narrow screen without moving the page
 
 ### 5. Image search
 - [ ] Upload a JPEG or PNG — the thumbnail appears, then results render
@@ -85,7 +87,7 @@ npm run db:setup && npm run dev
 
 ### 6. Save and track
 - [ ] Heart a listing → toast confirms, heart fills
-- [ ] Bell a listing → toast confirms, bell turns amber
+- [ ] Bell a listing → toast confirms, bell fills green
 - [ ] Both appear under the sidebar "Saved" tab
 - [ ] Reload — they are still there
 - [ ] Un-heart → it disappears from the sidebar
@@ -106,26 +108,39 @@ npm run db:setup && npm run dev
 - [ ] Logged out, run 6 searches — the 6th returns "Search limit reached…"
 - [ ] Log in — searching works again immediately
 
-### 10. Mobile (375px wide)
-- [ ] Sidebar is hidden; a ☰ button appears
-- [ ] ☰ opens the drawer over a dimmed background; ✕ and the backdrop both close it
+### 10. Plans and quota
+- [ ] Signed in, the sidebar shows a plan name and a used/limit bar (e.g. "Free plan 2/15")
+- [ ] Running a search increments the used count without a page reload
+- [ ] "Upgrade plan" opens `/pricing`
+- [ ] On `/pricing`, your current tier is marked "Your current plan" and the other two say "Coming soon"
+- [ ] Change your plan and confirm it applies **without logging out**:
+      ```bash
+      npm run plan:set -- you@example.com pro
+      ```
+      Reload — the sidebar should now read "Pro plan 2/200"
+- [ ] Set an invalid plan value directly in the database — the app treats it as Free rather than erroring
+- [ ] Logged out, `/pricing` still renders with no plan marked as current
+
+### 11. Mobile (375px wide)
+- [ ] Sidebar is hidden; a menu button appears in the top bar
+- [ ] It opens the drawer over a dimmed background; the close button and the backdrop both dismiss it
 - [ ] Both buttons are comfortably tappable — no precise aiming required
 - [ ] The page never scrolls sideways
 - [ ] Cards stack full width and text does not overflow
 
-### 11. Keyboard and screen reader
+### 12. Keyboard and screen reader
 - [ ] Tab through the page — focus is always visible
 - [ ] Every control reachable and operable by keyboard alone
 - [ ] Save/track buttons announce their state ("Remove … from saved" vs "Save … listing")
-- [ ] With "reduce motion" enabled in the OS, animations stop and the verdict appears at once
+- [ ] With "reduce motion" enabled in the OS, sections appear at once with no fade and the verdict shows in full
 
-### 12. Error handling
+### 13. Error handling
 - [ ] Stop the dev server mid-search — a readable error, no stack trace on screen
 - [ ] Set `ANTHROPIC_API_KEY` to a bogus value and unset `VFM_MOCK_SEARCH` — a clear
       "AI service isn't configured" message rather than a 500
 - [ ] Visit `/nonexistent-page` — the styled 404 renders
 
-### 13. Production build
+### 14. Production build
 - [ ] `npm run build` succeeds with no errors or lint failures
 - [ ] `npm start` serves the app and search still works
 

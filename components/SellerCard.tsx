@@ -5,15 +5,8 @@ import VfmBar from "./VfmBar";
 import PaymentPlans from "./PaymentPlans";
 import type { Listing } from "@/types";
 
-const RANK_CONFIG = [
-  { rank: 1, color: "#2dbe5f", icon: "🥇" },
-  { rank: 2, color: "#f59e0b", icon: "🥈" },
-  { rank: 3, color: "#a78bfa", icon: "🥉" },
-];
-
 export default function SellerCard({
   listing,
-  rank,
   isRecommended,
   isSaved,
   onSave,
@@ -21,8 +14,7 @@ export default function SellerCard({
   onTrack,
 }: {
   listing: Listing;
-  rank: number;
-  /** True for the listing the AI actually picked — not necessarily rank 1. */
+  /** True for the listing the AI actually picked — not necessarily the first. */
   isRecommended: boolean;
   isSaved: boolean;
   onSave: () => void;
@@ -34,174 +26,146 @@ export default function SellerCard({
   const [imgErr, setImgErr] = useState(false);
   const ids = useId();
   const analysisId = `${ids}-analysis`;
-  const rc = RANK_CONFIG.find((r) => r.rank === rank) || RANK_CONFIG[2];
 
-  const hasBuyUrl = Boolean(listing.buyUrl);
+  const isSecondhand = Boolean(listing.condition && listing.condition !== "New");
+
+  const facts: [string, string | undefined][] = [
+    ["Shipping", listing.shipping],
+    ["Delivery", listing.delivery],
+    ["Warranty", listing.warranty],
+    ["Seller rating", typeof listing.sellerRating === "number" ? `${listing.sellerRating} / 5` : undefined],
+  ];
 
   return (
-    <div
-      className="card-hover relative rounded-[18px] p-5"
+    <article
+      className="card relative flex flex-col p-5 md:p-6"
       style={{
-        background: "#111815",
-        border: `1px solid ${isRecommended ? rc.color + "38" : "rgba(45,190,95,0.09)"}`,
-        animation: "fadeUp .5s ease both",
+        // The pick is marked with a heavier rule, not a glow or a gradient.
+        borderColor: isRecommended ? "var(--accent)" : "var(--rule)",
+        borderWidth: isRecommended ? 1.5 : 1,
+        animation: "riseIn .4s ease both",
       }}
     >
       {isRecommended && (
         <div
-          className="absolute -top-[11px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-4 py-0.5 text-[10px] font-extrabold tracking-wider"
-          style={{ background: `linear-gradient(90deg,#2dbe5f,#1d9648)`, color: "#000" }}
+          className="absolute -top-[9px] left-5 px-2.5 py-[2px] rounded-full eyebrow"
+          style={{ background: "var(--accent)", color: "#fff", letterSpacing: "0.1em" }}
         >
-          ✦ VFM PICK
+          Best value
         </div>
       )}
 
-      <div className="absolute top-2.5 right-2.5 flex gap-1.5">
-        <button
-          onClick={onSave}
-          aria-pressed={isSaved}
-          aria-label={
-            isSaved ? `Remove ${listing.store} listing from saved` : `Save ${listing.store} listing`
-          }
-          title={isSaved ? "Remove from saved" : "Save product"}
-          className="w-[26px] h-[26px] rounded-full flex items-center justify-center text-xs transition-all"
-          style={{
-            background: isSaved ? "#2dbe5f22" : "#0f1410",
-            border: `1px solid ${isSaved ? "#2dbe5f60" : "rgba(45,190,95,0.09)"}`,
-            color: isSaved ? "#2dbe5f" : "#3d5542",
-          }}
-        >
-          <span aria-hidden="true">{isSaved ? "♥" : "♡"}</span>
-        </button>
-        <button
-          onClick={onTrack}
-          aria-pressed={isTracked}
-          aria-label={
-            isTracked
-              ? `Stop tracking the price at ${listing.store}`
-              : `Track price drops at ${listing.store}`
-          }
-          title={isTracked ? "Stop price tracking" : "Track price drops"}
-          className="w-[26px] h-[26px] rounded-full flex items-center justify-center text-[11px] transition-all"
-          style={{
-            background: isTracked ? "#f59e0b22" : "#0f1410",
-            border: `1px solid ${isTracked ? "#f59e0b60" : "rgba(45,190,95,0.09)"}`,
-            color: isTracked ? "#f59e0b" : "#3d5542",
-          }}
-        >
-          <span aria-hidden="true">🔔</span>
-        </button>
-      </div>
-
-      <div className="flex gap-3 items-start" style={{ marginTop: isRecommended ? 8 : 0 }}>
-        <div
-          className="w-16 h-16 rounded-xl flex items-center justify-center text-[26px] flex-shrink-0 overflow-hidden"
-          style={{ background: `${rc.color}12`, border: `1px solid ${rc.color}22` }}
-        >
-          {!imgErr && listing.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={listing.imageUrl}
-              alt=""
-              loading="lazy"
-              onError={() => setImgErr(true)}
-              className="w-full h-full object-cover rounded-[11px]"
-            />
-          ) : (
-            <span aria-hidden="true">{listing.emoji || "📦"}</span>
+      <header className="flex items-start justify-between gap-3 mt-1">
+        <div className="min-w-0">
+          <h3 className="text-[15px] font-semibold truncate" style={{ color: "var(--ink)" }}>
+            {listing.store}
+          </h3>
+          {isSecondhand && (
+            <span
+              className="inline-block mt-1.5 text-[11px] px-2 py-[1px] rounded-full"
+              style={{ background: "var(--flag-wash)", color: "var(--flag)", border: "1px solid var(--flag)" }}
+            >
+              {listing.condition}
+            </span>
           )}
         </div>
-        <div className="flex-1 min-w-0" style={{ paddingRight: 56 }}>
-          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-            <span className="text-[15px]" aria-hidden="true">
-              {rc.icon}
-            </span>
-            <span className="text-[11px] font-semibold" style={{ color: rc.color }}>
-              {listing.store}
-            </span>
-            {listing.condition && listing.condition !== "New" && (
-              <span
-                className="text-[9px] rounded-full px-[7px] py-[1px]"
-                style={{ background: "#f59e0b18", color: "#f59e0b", border: "1px solid #f59e0b30" }}
-              >
-                {listing.condition}
-              </span>
-            )}
-          </div>
-          <div
-            className="text-[21px] font-extrabold leading-tight"
-            style={{ color: rc.color, fontFamily: "JetBrains Mono, monospace" }}
+
+        <div className="flex gap-1.5 flex-shrink-0">
+          <IconToggle
+            active={isSaved}
+            onClick={onSave}
+            label={isSaved ? `Remove ${listing.store} listing from saved` : `Save ${listing.store} listing`}
           >
-            {listing.price}
-          </div>
-          {listing.originalPrice && (
-            <div className="text-[11px]" style={{ color: "#3d5542" }}>
-              <span className="line-through">{listing.originalPrice}</span>
-              <span className="sr-only"> was the original price</span>
-            </div>
-          )}
+            <HeartIcon filled={isSaved} />
+          </IconToggle>
+          <IconToggle
+            active={isTracked}
+            onClick={onTrack}
+            label={
+              isTracked
+                ? `Stop tracking the price at ${listing.store}`
+                : `Track price drops at ${listing.store}`
+            }
+          >
+            <BellIcon filled={isTracked} />
+          </IconToggle>
         </div>
+      </header>
+
+      {/* Price is the headline of the card — serif display, like the reference's
+          big data numbers. */}
+      <div className="mt-4 flex items-end gap-2.5 flex-wrap">
+        <span
+          className="display"
+          style={{ fontSize: "2.4rem", lineHeight: 1, color: "var(--ink)" }}
+        >
+          {listing.price}
+        </span>
+        {listing.originalPrice && (
+          <span className="text-[13px] pb-1" style={{ color: "var(--ink-mute)" }}>
+            <span className="line-through">{listing.originalPrice}</span>
+            <span className="sr-only"> was the original price</span>
+          </span>
+        )}
       </div>
 
-      <div className="grid grid-cols-2 gap-1.5 my-3">
-        {[
-          { icon: "🚚", label: "Shipping", val: listing.shipping },
-          { icon: "📦", label: "Delivery", val: listing.delivery },
-          { icon: "🛡️", label: "Warranty", val: listing.warranty },
-          {
-            icon: "⭐",
-            label: "Seller",
-            val: typeof listing.sellerRating === "number" ? `${listing.sellerRating}/5` : undefined,
-          },
-        ].map((m) => (
-          <div key={m.label} className="rounded-lg px-2 py-1.5" style={{ background: "rgba(45,190,95,0.05)" }}>
-            <div className="text-[9px] mb-0.5" style={{ color: "#3d5542" }}>
-              <span aria-hidden="true">{m.icon}</span> {m.label}
-            </div>
-            <div className="text-[11px] font-medium" style={{ color: "#8aaa8e" }}>
-              {m.val || "Not listed"}
-            </div>
+      {listing.imageUrl && !imgErr && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={listing.imageUrl}
+          alt=""
+          loading="lazy"
+          onError={() => setImgErr(true)}
+          className="mt-4 w-full h-32 object-contain rounded-lg"
+          style={{ background: "var(--panel)" }}
+        />
+      )}
+
+      {/* Plain mono labels, no icons — the reference labels its data this way. */}
+      <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3.5">
+        {facts.map(([label, value]) => (
+          <div key={label}>
+            <dt className="eyebrow" style={{ fontSize: 10 }}>
+              {label}
+            </dt>
+            <dd className="text-[13px] mt-1" style={{ color: value ? "var(--ink-soft)" : "var(--ink-mute)" }}>
+              {value || "Not listed"}
+            </dd>
           </div>
         ))}
+      </dl>
+
+      <div className="mt-5">
+        <VfmBar score={listing.valueScore} />
       </div>
 
-      <VfmBar score={listing.valueScore} />
-
-      <div className="flex gap-1.5 mt-2.5">
-        {/* A missing buyUrl used to render href="#", which looked clickable and
-            silently did nothing. The AI is told to omit the field rather than
-            invent a link, so this state is expected. */}
-        {hasBuyUrl ? (
+      <div className="mt-5 flex gap-2">
+        {listing.buyUrl ? (
           <a
             href={listing.buyUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn-jade flex-1 text-center flex items-center justify-center gap-1.5"
+            className="btn flex-1"
           >
-            Buy on {listing.store} <span aria-hidden="true">↗</span>
+            Buy at {listing.store}
             <span className="sr-only">(opens in a new tab)</span>
           </a>
         ) : (
           <span
-            className="flex-1 text-center flex items-center justify-center rounded-[11px] px-5 py-2.5 text-[13px]"
-            style={{
-              background: "rgba(45,190,95,0.05)",
-              border: "1px dashed rgba(45,190,95,0.22)",
-              color: "#3d5542",
-            }}
+            className="flex-1 text-center text-[13px] px-4 py-[11px] rounded-[10px]"
+            style={{ border: "1px dashed var(--rule-strong)", color: "var(--ink-mute)" }}
             title="The search didn't return a direct link for this listing"
           >
-            No direct link found
+            No direct link
           </span>
         )}
         <button
           onClick={() => setShowPay((p) => !p)}
           aria-expanded={showPay}
-          aria-label="Show payment plans"
-          className="btn-ghost px-[11px] py-2 text-[13px]"
-          title="Payment plans"
+          className="btn-quiet"
+          style={{ padding: "9px 14px", minHeight: 44 }}
         >
-          <span aria-hidden="true">💳</span>
+          Instalments
         </button>
       </div>
 
@@ -211,60 +175,112 @@ export default function SellerCard({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-controls={analysisId}
-        className="w-full mt-2 py-1.5 rounded-[10px] text-[11px] transition-colors"
-        style={{ background: "none", border: "1px solid rgba(45,190,95,0.09)", color: "#3d5542" }}
+        className="mt-4 pt-4 text-[12.5px] text-left flex items-center justify-between"
+        style={{ borderTop: "1px solid var(--rule)", color: "var(--ink-soft)", background: "none" }}
       >
-        {open ? "▲ Less" : "▼ AI Analysis"}
+        <span>Why this score</span>
+        <span aria-hidden="true" style={{ color: "var(--ink-mute)" }}>
+          {open ? "–" : "+"}
+        </span>
       </button>
 
       {open && (
-        <div id={analysisId} className="mt-2.5" style={{ animation: "fadeUp .3s ease" }}>
-          {listing.pros?.length || listing.cons?.length ? (
-            <div className="grid grid-cols-2 gap-2 mb-2.5">
-              <div
-                className="rounded-[10px] p-2.5"
-                style={{ background: "rgba(45,190,95,0.07)", border: "1px solid rgba(45,190,95,0.15)" }}
-              >
-                <div className="text-[9px] font-bold mb-1.5 tracking-wider" style={{ color: "#2dbe5f" }}>
-                  PROS
-                </div>
-                {(listing.pros || []).map((p, i) => (
-                  <div key={i} className="text-[11px] mb-0.5" style={{ color: "#8aaa8e" }}>
-                    <span aria-hidden="true">✓</span> {p}
-                  </div>
-                ))}
-              </div>
-              <div
-                className="rounded-[10px] p-2.5"
-                style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.14)" }}
-              >
-                <div className="text-[9px] font-bold mb-1.5 tracking-wider" style={{ color: "#ef4444" }}>
-                  CONS
-                </div>
-                {(listing.cons || []).map((c, i) => (
-                  <div key={i} className="text-[11px] mb-0.5" style={{ color: "#8aaa8e" }}>
-                    <span aria-hidden="true">✗</span> {c}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
+        <div id={analysisId} className="mt-3.5" style={{ animation: "riseIn .3s ease both" }}>
           {listing.aiReason && (
-            <div
-              className="rounded-[10px] px-[11px] py-2.5 text-xs leading-relaxed"
-              style={{
-                background: "rgba(45,190,95,0.05)",
-                border: "1px solid rgba(45,190,95,0.18)",
-                borderLeft: "2px solid #2dbe5f",
-                color: "#8aaa8e",
-              }}
+            <p
+              className="text-[13px] leading-relaxed pl-3 mb-4"
+              style={{ borderLeft: "2px solid var(--accent)", color: "var(--ink-soft)" }}
             >
-              <span style={{ color: "#2dbe5f", fontWeight: 600 }}>AI: </span>
               {listing.aiReason}
+            </p>
+          )}
+          {(listing.pros?.length || listing.cons?.length) && (
+            <div className="grid gap-4">
+              {listing.pros?.length ? (
+                <div>
+                  <p className="eyebrow mb-2" style={{ fontSize: 10 }}>
+                    In its favour
+                  </p>
+                  <ul className="space-y-1.5">
+                    {listing.pros.map((p, i) => (
+                      <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--ink-soft)" }}>
+                        <span aria-hidden="true" style={{ color: "var(--accent)" }}>
+                          +
+                        </span>
+                        {p}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {listing.cons?.length ? (
+                <div>
+                  <p className="eyebrow mb-2" style={{ fontSize: 10 }}>
+                    Against it
+                  </p>
+                  <ul className="space-y-1.5">
+                    {listing.cons.map((c, i) => (
+                      <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--ink-soft)" }}>
+                        <span aria-hidden="true" style={{ color: "var(--flag)" }}>
+                          −
+                        </span>
+                        {c}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           )}
         </div>
       )}
-    </div>
+    </article>
+  );
+}
+
+function IconToggle({
+  active,
+  onClick,
+  label,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      aria-label={label}
+      className="flex items-center justify-center rounded-lg transition-colors"
+      style={{
+        width: 34,
+        height: 34,
+        border: `1px solid ${active ? "var(--accent)" : "var(--rule)"}`,
+        color: active ? "var(--accent)" : "var(--ink-mute)",
+        background: active ? "var(--accent-wash)" : "transparent",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function HeartIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M12 20.5 3.9 12.6a5.1 5.1 0 0 1 7.2-7.2l.9.9.9-.9a5.1 5.1 0 0 1 7.2 7.2z" />
+    </svg>
+  );
+}
+
+function BellIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <path d="M18 9a6 6 0 0 0-12 0c0 6-2 7-2 7h16s-2-1-2-7" />
+      <path d="M10.5 20a2 2 0 0 0 3 0" />
+    </svg>
   );
 }

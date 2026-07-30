@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { askFollowUp } from "@/lib/ai";
+import { prisma } from "@/lib/prisma";
+import { getPlan } from "@/lib/plans";
 import { getCurrentSession } from "@/lib/auth";
 import { apiError, handle, readJson } from "@/lib/http";
 import { callerKey, hit, LIMITS, rateLimitHeaders } from "@/lib/rate-limit";
@@ -38,15 +40,20 @@ export async function POST(req: NextRequest) {
       return apiError("unauthorized", "Log in to ask follow-up questions.");
     }
 
-    const rl = hit(
-      callerKey(req, session.userId),
-      LIMITS.chatUser.limit,
-      LIMITS.chatUser.windowSeconds
-    );
+    // Plan comes from the database so an upgrade applies without re-login.
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { plan: true },
+    });
+    const plan = getPlan(user?.plan);
+
+    const rl = hit(callerKey(req, session.userId), plan.chatPerHour, LIMITS.chatUser.windowSeconds);
     if (!rl.ok) {
-      return apiError("rate_limited", "You've hit the hourly chat limit. Please try again shortly.", {
-        headers: rateLimitHeaders(rl),
-      });
+      return apiError(
+        "rate_limited",
+        `You've hit the hourly follow-up limit for the ${plan.name} plan. Please try again shortly.`,
+        { headers: rateLimitHeaders(rl) }
+      );
     }
 
     const body = await readJson(req, ChatSchema, { maxBytes: 128 * 1024 });
@@ -56,6 +63,7 @@ export async function POST(req: NextRequest) {
       originalQuery: body.originalQuery ?? "",
       productContext: body.productContext,
       userMessage: body.userMessage,
+      model: plan.model,
     });
 
     return NextResponse.json({ reply }, { headers: rateLimitHeaders(rl) });

@@ -42,7 +42,19 @@ export type SearchResult = {
  */
 export type ChatMessage = { role: "user" | "assistant"; text: string };
 
-export type User = { id: string; email: string; name: string };
+export type PlanId = "free" | "pro" | "premium";
+
+export type User = { id: string; email: string; name: string; plan: PlanId };
+
+/** This month's search allowance, returned alongside the session. */
+export type Usage = {
+  used: number;
+  limit: number;
+  remaining: number;
+  /** ISO timestamp of the next reset. */
+  resetsAt: string;
+  planName: string;
+};
 
 /** A past search, as returned by `GET /api/history`. */
 export type HistoryEntry = {

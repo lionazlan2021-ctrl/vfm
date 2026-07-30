@@ -4,8 +4,11 @@ import { ApiError } from "./errors";
 import { mockSearch } from "./mock-search";
 
 /**
- * Claude Sonnet 5. The previous pin here was `claude-sonnet-4-20250514`, which
- * is deprecated — see README "Changing the AI model" before editing this.
+ * Default model, used when no plan is supplied (and by the follow-up chat).
+ * Each subscription tier overrides this — see `lib/plans.ts`.
+ *
+ * The previous pin here was `claude-sonnet-4-20250514`, which is deprecated —
+ * see README "Changing the AI model" before editing this.
  */
 const MODEL = process.env.VFM_MODEL || "claude-sonnet-5";
 
@@ -283,10 +286,16 @@ function translateSdkError(err: unknown, routeLabel: string): never {
 // Product search
 // ---------------------------------------------------------------------------
 
+export type SearchEffort = "low" | "medium" | "high" | "xhigh";
+
 export type SearchParams = {
   query: string;
   imageBase64?: string;
   imageMediaType?: SupportedImageType;
+  /** Model for this request. Comes from the caller's plan; defaults to MODEL. */
+  model?: string;
+  /** Reasoning effort. Higher tiers think harder about the value judgement. */
+  effort?: SearchEffort;
 };
 
 /** Live product search — Claude with the web-search tool enabled. */
@@ -294,6 +303,8 @@ export async function searchProducts({
   query,
   imageBase64,
   imageMediaType,
+  model = MODEL,
+  effort = "high",
 }: SearchParams): Promise<ParsedSearchResult> {
   if (isMockMode()) return mockSearch(query, Boolean(imageBase64));
 
@@ -321,13 +332,13 @@ export async function searchProducts({
   let raw: string;
   try {
     raw = await runToCompletion(client, {
-      model: MODEL,
+      model,
       // Thinking and the JSON answer share this budget, so it needs real
       // headroom — the previous 2200 truncated the response mid-object.
       max_tokens: 8000,
       system: SEARCH_SYSTEM,
       thinking: { type: "adaptive" },
-      output_config: { effort: "high" },
+      output_config: { effort },
       tools: [WEB_SEARCH_TOOL as unknown as Anthropic.ToolUnion],
       messages: [{ role: "user", content }],
     });
@@ -409,11 +420,13 @@ export async function askFollowUp({
   originalQuery,
   productContext,
   userMessage,
+  model = MODEL,
 }: {
   history: ChatTurn[];
   originalQuery: string;
   productContext: unknown;
   userMessage: string;
+  model?: string;
 }): Promise<string> {
   if (isMockMode()) {
     return `(Sample mode) You asked: "${userMessage}". With VFM_MOCK_SEARCH=1 no live AI call is made, so this is placeholder text. Add a real ANTHROPIC_API_KEY and unset VFM_MOCK_SEARCH to get grounded answers about "${originalQuery}".`;
@@ -437,7 +450,7 @@ ${context}
 
   try {
     const response = await client.messages.create({
-      model: MODEL,
+      model,
       max_tokens: 1000,
       system,
       // Short factual Q&A over data already in context — thinking adds latency

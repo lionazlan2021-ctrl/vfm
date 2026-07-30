@@ -10,7 +10,7 @@ import AuthModal from "@/components/AuthModal";
 import TopSearchBar from "@/components/TopSearchBar";
 import { ToastProvider, useToast } from "@/components/Toast";
 import { apiFetch, apiSend, errorMessage, ApiRequestError } from "@/lib/api-client";
-import type { SearchResult, User, Listing, HistoryEntry, SavedEntry } from "@/types";
+import type { SearchResult, User, Listing, HistoryEntry, SavedEntry, Usage } from "@/types";
 
 type AppState = "home" | "loading" | "results" | "error";
 
@@ -26,9 +26,9 @@ function VFMApp() {
   const [saved, setSaved] = useState<SavedEntry[]>([]);
   const [tracked, setTracked] = useState<SavedEntry[]>([]);
   const [user, setUser] = useState<User | null>(null);
+  const [usage, setUsage] = useState<Usage | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
   const { push } = useToast();
@@ -36,13 +36,22 @@ function VFMApp() {
   const savedIds = new Set(saved.map((s) => entryKey(s.query, s.listing.store)));
   const trackedIds = new Set(tracked.map((t) => entryKey(t.query, t.listing.store)));
 
-  // Restore the session on load.
-  useEffect(() => {
-    apiFetch<{ user: User | null }>("/api/auth/me")
-      .then((d) => setUser(d.user))
-      .catch(() => setUser(null))
-      .finally(() => setAuthChecked(true));
+  /** Session plus this month's quota — one request, so they can't disagree. */
+  const refreshSession = useCallback(() => {
+    return apiFetch<{ user: User | null; usage?: Usage }>("/api/auth/me")
+      .then((d) => {
+        setUser(d.user);
+        setUsage(d.usage ?? null);
+      })
+      .catch(() => {
+        setUser(null);
+        setUsage(null);
+      });
   }, []);
+
+  useEffect(() => {
+    refreshSession().finally(() => setAuthChecked(true));
+  }, [refreshSession]);
 
   const refreshHistory = useCallback(() => {
     apiFetch<{ history: HistoryEntry[] }>("/api/history")
@@ -73,7 +82,7 @@ function VFMApp() {
   const doSearch = useCallback(
     async (q: string, file?: File | null) => {
       const sq = (q || "").trim();
-      const label = sq || (file ? `📸 ${file.name}` : "");
+      const label = sq || (file ? `Photo: ${file.name}` : "");
       if (!label) return;
 
       setMobileNavOpen(false);
@@ -114,10 +123,13 @@ function VFMApp() {
 
         setResults(data);
         setState("results");
-        push("Search complete");
         // Re-read history from the server so the sidebar shows the real row id,
         // which is what makes a past search reopenable without paying again.
-        if (user) refreshHistory();
+        // Usage is re-read too, since this search just consumed one.
+        if (user) {
+          refreshHistory();
+          void refreshSession();
+        }
         scrollToTop();
       } catch (e) {
         if (e instanceof ApiRequestError && e.status === 401) setShowAuth(true);
@@ -125,7 +137,7 @@ function VFMApp() {
         setState("error");
       }
     },
-    [push, user, refreshHistory]
+    [user, refreshHistory, refreshSession]
   );
 
   /**
@@ -204,7 +216,7 @@ function VFMApp() {
               createdAt: new Date().toISOString(),
             },
           ]);
-          push("Saved product ♥");
+          push("Saved");
         }
       } catch (e) {
         push(errorMessage(e, "Couldn't update your saved list."), "error");
@@ -236,7 +248,7 @@ function VFMApp() {
               createdAt: new Date().toISOString(),
             },
           ]);
-          push(`Tracking price drops for ${listing.store} 🔔`);
+          push(`Tracking the price at ${listing.store}`);
         }
       } catch (e) {
         push(errorMessage(e, "Couldn't update price tracking."), "error");
@@ -262,9 +274,11 @@ function VFMApp() {
     (u: User) => {
       setUser(u);
       setShowAuth(false);
-      push(`Welcome, ${u.name}!`);
+      // Pull the plan and quota that belong to this account.
+      void refreshSession();
+      push(`Welcome, ${u.name}`);
     },
-    [push]
+    [push, refreshSession]
   );
 
   const handleLogout = useCallback(async () => {
@@ -274,18 +288,19 @@ function VFMApp() {
       // Clear locally regardless — the cookie may already be gone.
     }
     setUser(null);
+    setUsage(null);
     // Also drop on-screen results: they belong to the session that just ended.
     reset();
     push("Logged out");
   }, [push, reset]);
 
   return (
-    <div className="flex min-h-screen" style={{ background: "#07090a" }}>
+    <div className="flex min-h-screen" style={{ background: "var(--paper)" }}>
       {/* Dimmer behind the mobile drawer. */}
       {mobileNavOpen && (
         <div
           className="fixed inset-0 z-[90] md:hidden"
-          style={{ background: "rgba(0,0,0,.6)" }}
+          style={{ background: "rgba(23,25,15,.36)" }}
           onClick={() => setMobileNavOpen(false)}
           aria-hidden="true"
         />
@@ -299,11 +314,10 @@ function VFMApp() {
         onNewSearch={reset}
         currentQuery={query}
         user={user}
+        usage={usage}
         authChecked={authChecked}
         onShowAuth={() => setShowAuth(true)}
         onLogout={handleLogout}
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
         onRemoveSaved={removeSaved}
         mobileOpen={mobileNavOpen}
         onCloseMobile={() => setMobileNavOpen(false)}
@@ -315,49 +329,31 @@ function VFMApp() {
         style={{ maxHeight: "100vh" }}
       >
         <div
-          className="sticky top-0 z-[80] px-4 py-2.5 flex items-center gap-3 md:hidden"
-          style={{
-            background: "rgba(7,9,10,0.92)",
-            backdropFilter: "blur(16px)",
-            borderBottom: "1px solid rgba(45,190,95,0.09)",
-          }}
+          className="sticky top-0 z-[80] px-4 py-2 flex items-center gap-2 md:hidden"
+          style={{ background: "var(--paper)", borderBottom: "1px solid var(--rule)" }}
         >
           {/* 44px minimum so it is comfortably tappable on a phone. */}
           <button
             onClick={() => setMobileNavOpen(true)}
             aria-label="Open menu"
             aria-expanded={mobileNavOpen}
-            className="text-lg leading-none flex items-center justify-center -ml-2"
-            style={{
-              color: "#2dbe5f",
-              background: "none",
-              border: "none",
-              minWidth: 44,
-              minHeight: 44,
-            }}
+            className="flex items-center justify-center -ml-2"
+            style={{ color: "var(--ink)", background: "none", border: "none", minWidth: 44, minHeight: 44 }}
           >
-            <span aria-hidden="true">☰</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
           </button>
-          <span className="font-extrabold text-sm" style={{ color: "#ddeede" }}>
-            VFM<span style={{ color: "#2dbe5f" }}>.com</span>
+          <span className="display text-[17px]" style={{ color: "var(--ink)" }}>
+            VFM<span style={{ color: "var(--accent)" }}>.</span>
           </span>
         </div>
 
         {state === "results" && (
           <div
-            className="sticky top-0 z-[70] px-4 md:px-6 py-2.5 flex items-center justify-between gap-3"
-            style={{
-              background: "rgba(7,9,10,0.9)",
-              backdropFilter: "blur(16px)",
-              borderBottom: "1px solid rgba(45,190,95,0.09)",
-            }}
+            className="sticky top-0 z-[70] px-4 md:px-8 py-2.5 flex items-center justify-end gap-3"
+            style={{ background: "var(--paper)", borderBottom: "1px solid var(--rule)" }}
           >
-            <div
-              className="text-xs overflow-hidden text-ellipsis whitespace-nowrap hidden sm:block"
-              style={{ color: "#8aaa8e" }}
-            >
-              <span style={{ color: "#2dbe5f" }}>✦</span> {query}
-            </div>
             <TopSearchBar onSearch={doSearch} />
           </div>
         )}
@@ -365,7 +361,7 @@ function VFMApp() {
         <main>
           {state === "home" && <HomeHero onSearch={doSearch} />}
           {state === "loading" && (
-            <div className="max-w-[960px] mx-auto px-4 py-8">
+            <div className="max-w-6xl mx-auto px-5 md:px-8 py-10">
               <LoadingView query={query} />
             </div>
           )}

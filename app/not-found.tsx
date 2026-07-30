@@ -2,24 +2,19 @@ import Link from "next/link";
 
 export default function NotFound() {
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-6"
-      style={{ background: "#07090a" }}
-    >
-      <div className="text-center max-w-[420px]">
-        <div className="text-[40px] mb-3.5" aria-hidden="true">
-          🔍
-        </div>
-        <h1 className="font-semibold mb-1.5 text-lg" style={{ color: "#ddeede" }}>
-          Page not found
+    <main className="min-h-screen flex items-center px-5 md:px-16">
+      <div className="max-w-2xl">
+        <p className="eyebrow mb-4">404</p>
+        <h1 className="display mb-4" style={{ fontSize: "clamp(2rem, 4vw, 3rem)", color: "var(--ink)" }}>
+          There&apos;s nothing here
         </h1>
-        <p className="text-[13px] mb-6 leading-relaxed" style={{ color: "#8aaa8e" }}>
-          That page doesn&apos;t exist. Head back to the search to compare prices.
+        <p className="text-[15px] leading-relaxed max-w-prose mb-8" style={{ color: "var(--ink-soft)" }}>
+          That page doesn&apos;t exist. Head back and compare something instead.
         </p>
-        <Link href="/" className="btn-jade inline-block">
+        <Link href="/" className="btn">
           Back to search
         </Link>
       </div>
-    </div>
+    </main>
   );
 }

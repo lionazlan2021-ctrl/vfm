@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, createContext, useContext } from "react";
+import { useState, useCallback, useEffect, useRef, createContext, useContext } from "react";
 
 type Toast = { id: string; msg: string; type: "success" | "error" };
 type ToastContextType = { push: (msg: string, type?: "success" | "error") => void };
@@ -13,29 +13,39 @@ export function useToast() {
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  // Clear pending timers on unmount so they can't fire against a dead component.
+  useEffect(() => {
+    const pending = timers.current;
+    return () => pending.forEach(clearTimeout);
+  }, []);
 
   const push = useCallback((msg: string, type: "success" | "error" = "success") => {
     const id = Math.random().toString(36).slice(2);
     setToasts((t) => [...t, { id, msg, type }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2800);
+    timers.current.push(setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200));
   }, []);
 
   return (
     <ToastContext.Provider value={{ push }}>
       {children}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[999] flex flex-col gap-2 items-center">
+      <div
+        className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[999] flex flex-col gap-2 items-center px-4"
+        role="status"
+        aria-live="polite"
+      >
         {toasts.map((t) => (
           <div
             key={t.id}
-            className="flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[12.5px] font-medium shadow-lg"
+            className="text-[13px] px-4 py-2.5 rounded-lg"
             style={{
-              background: "#111815",
-              border: `1px solid ${t.type === "error" ? "rgba(239,68,68,.35)" : "rgba(45,190,95,.3)"}`,
-              color: t.type === "error" ? "#fca5a5" : "#2dbe5f",
-              animation: "toastIn .25s ease",
+              background: "var(--ink)",
+              color: "var(--paper)",
+              borderLeft: `3px solid ${t.type === "error" ? "var(--flag)" : "var(--accent)"}`,
+              animation: "riseIn .25s ease both",
             }}
           >
-            <span>{t.type === "error" ? "⚠️" : "✓"}</span>
             {t.msg}
           </div>
         ))}

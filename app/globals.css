@@ -1,46 +1,111 @@
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300;12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Fraunces — editorial serif display, carries the personality.
+   Inter Tight — clean body/UI face.
+   JetBrains Mono — eyebrow labels, prices, scores. Data reads as data. */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+  Palette — warm paper with a single disciplined accent.
+
+  Adapted from the Daylight reference (cream page, beige panels, warm near-black
+  ink, one saturated accent). The reference's accent is amber; ours is a deep
+  banknote green, because this product is about money and the green has to read
+  as value rather than decoration. Amber is kept as a narrow secondary, used
+  only to flag non-new condition.
+*/
+:root {
+  --paper: #fbf7ef;
+  --paper-deep: #f4eee1;
+  --panel: #f2ece0;
+  --panel-alt: #ebe3d3;
+  --rule: #ddd3c0;
+  --rule-strong: #c9bda5;
+
+  --ink: #17190f;
+  --ink-soft: #4a4f3f;
+  --ink-mute: #7d8271;
+
+  --accent: #1f6f43;
+  --accent-deep: #17512f;
+  --accent-wash: #e7efe6;
+
+  --flag: #9a6510;
+  --flag-wash: #f6ecdb;
+
+  --radius-card: 18px;
+  --radius-panel: 26px;
+}
 
 html {
   scroll-behavior: smooth;
 }
 
 body {
-  background: #07090a;
-  color: #ddeede;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Inter Tight", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Type scale ---------------------------------------------------------- */
+
+.display {
+  font-family: Fraunces, Georgia, serif;
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+}
+
+/* Small uppercase mono label. The reference's signature move — used for
+   section eyebrows, table headers and data labels, never for prose. */
+.eyebrow {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.numeric {
+  font-family: "JetBrains Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 ::selection {
-  background: rgba(45, 190, 95, 0.22);
+  background: rgba(31, 111, 67, 0.16);
+}
+
+::placeholder {
+  color: var(--ink-mute);
 }
 
 ::-webkit-scrollbar {
-  width: 3px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(45, 190, 95, 0.18);
+  background: var(--rule-strong);
   border-radius: 99px;
+  border: 3px solid var(--paper);
 }
 
-::placeholder {
-  color: #3d5542;
-}
-
-/* Keyboard focus must be visible everywhere. Scoped to :focus-visible so it
-   appears for keyboard users without ringing every mouse click. */
+/* Keyboard focus must always be visible. */
 :focus-visible {
-  outline: 2px solid #2dbe5f;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
-/* Visually hidden, but still announced by screen readers. */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -53,111 +118,96 @@ body {
   border: 0;
 }
 
+/* ---- Controls ------------------------------------------------------------ */
 
-/* Scroll-triggered reveal animation, toggled by IntersectionObserver in components */
-.reveal {
-  opacity: 0;
-  transform: translateY(22px);
-  transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1), transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.reveal.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.shimmer-bg {
-  background: linear-gradient(90deg, #0f1410 25%, #111815 50%, #0f1410 75%);
-  background-size: 600px 100%;
-  animation: shimmer 1.6s linear infinite;
-}
-@keyframes shimmer {
-  0% { background-position: -600px 0; }
-  100% { background-position: 600px 0; }
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-
-/* Jade, to match the elements it is actually used on (voice buttons, the chat
-   status dot). It was previously red, which read as an error state. */
-@keyframes pulseRing {
-  0% { box-shadow: 0 0 0 0 rgba(45, 190, 95, 0.5); }
-  70% { box-shadow: 0 0 0 8px rgba(45, 190, 95, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(45, 190, 95, 0); }
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-@keyframes toastIn {
-  from { opacity: 0; transform: translateY(8px) scale(0.96); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.btn-jade {
-  background: linear-gradient(135deg, #2dbe5f, #1d9648);
-  border: none;
-  border-radius: 11px;
-  padding: 9px 20px;
-  color: #000;
-  font-size: 13px;
-  font-weight: 700;
+/* Solid ink button, as in the reference. The accent green is reserved for
+   value signals (scores, the pick) so it keeps its meaning. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--ink);
+  color: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 10px;
+  padding: 11px 20px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.15s, transform 0.12s;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
-.btn-jade:hover:not(:disabled) {
-  opacity: 0.9;
-  transform: scale(1.01);
+.btn:hover:not(:disabled) {
+  background: #24271a;
 }
-.btn-jade:active:not(:disabled) {
-  transform: scale(0.98);
-}
-.btn-jade:disabled {
-  opacity: 0.35;
+.btn:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-.btn-ghost {
-  background: none;
-  border: 1px solid rgba(45, 190, 95, 0.09);
-  border-radius: 11px;
-  padding: 8px 16px;
-  color: #8aaa8e;
-  font-size: 13px;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+.btn-accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
-.btn-ghost:hover {
-  border-color: rgba(45, 190, 95, 0.3);
-  color: #2dbe5f;
+.btn-accent:hover:not(:disabled) {
+  background: var(--accent-deep);
 }
 
-.card-hover {
-  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.22s, box-shadow 0.22s;
+.btn-quiet {
+  background: transparent;
+  color: var(--ink-soft);
+  border: 1px solid var(--rule);
 }
-.card-hover:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(45, 190, 95, 0.08);
+.btn-quiet:hover:not(:disabled) {
+  border-color: var(--ink-soft);
+  color: var(--ink);
+  background: transparent;
 }
 
-.sidebar-link {
+.field {
+  width: 100%;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 14px;
+  color: var(--ink);
+  transition: border-color 0.15s ease;
+}
+.field:hover {
+  border-color: var(--rule-strong);
+}
+.field:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(31, 111, 67, 0.12);
+}
+
+/* ---- Surfaces ------------------------------------------------------------ */
+
+.card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-card);
+}
+
+/* Large beige block used to break the page rhythm, per the reference. */
+.panel {
+  background: var(--panel);
+  border-radius: var(--radius-panel);
+}
+
+.nav-link {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 7px 10px;
-  border-radius: 9px;
-  font-size: 12.5px;
-  color: #8aaa8e;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: var(--ink-soft);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s ease, color 0.15s ease;
   border: none;
   background: none;
   width: 100%;
@@ -166,15 +216,48 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.sidebar-link:hover,
-.sidebar-link.active {
-  background: rgba(45, 190, 95, 0.11);
-  color: #2dbe5f;
+.nav-link:hover,
+.nav-link.active {
+  background: var(--accent-wash);
+  color: var(--accent-deep);
 }
 
-/* Respect a reduced-motion preference. This UI leans on animation heavily
-   (reveals, shimmer, typewriter, pulses), which can be uncomfortable.
-   Must stay last in the file so it overrides the rules above. */
+/* ---- Motion -------------------------------------------------------------- */
+
+/* The scroll reveal lives in components/Reveal.tsx and applies its styles
+   inline, so content is visible by default and can never be stranded hidden by
+   a stylesheet. Deliberately nothing here. */
+
+.shimmer-bg {
+  background: linear-gradient(90deg, var(--panel) 25%, var(--panel-alt) 50%, var(--panel) 75%);
+  background-size: 600px 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+@keyframes shimmer {
+  0% { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Must stay last so it overrides the animation rules above. */
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -185,9 +268,5 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-  }
-  .reveal {
-    opacity: 1;
-    transform: none;
   }
 }

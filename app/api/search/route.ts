@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentSession } from "@/lib/auth";
 import { apiError, handle, readJson } from "@/lib/http";
 import { callerKey, hit, LIMITS, rateLimitHeaders } from "@/lib/rate-limit";
+import { getPlan } from "@/lib/plans";
+import { getUsage, formatResetDate } from "@/lib/usage";
 
 /**
  * Roughly 3.4 MB of original image once base64 is decoded. Anthropic accepts up
@@ -54,10 +56,32 @@ export async function POST(req: NextRequest) {
     const body = await readJson(req, SearchSchema, { maxBytes: MAX_BODY_BYTES });
     const query = body.query?.trim() || "";
 
+    // The plan is read from the database, not the session cookie, so an upgrade
+    // takes effect immediately instead of after the user next logs in.
+    let plan = getPlan(undefined);
+    if (session) {
+      const user = await prisma.user.findUnique({
+        where: { id: session.userId },
+        select: { plan: true },
+      });
+      const usage = await getUsage(session.userId, user?.plan);
+      plan = usage.plan;
+
+      if (usage.exhausted) {
+        return apiError(
+          "rate_limited",
+          `You've used all ${usage.limit} searches on the ${plan.name} plan this month. Your quota resets on ${formatResetDate(usage.resetsAt)}.`,
+          { headers: rateLimitHeaders(rl) }
+        );
+      }
+    }
+
     const result = await searchProducts({
       query,
       imageBase64: body.imageBase64,
       imageMediaType: body.imageMediaType as never,
+      model: plan.model,
+      effort: plan.searchEffort,
     });
 
     // Record the search for signed-in users. A history write must never sink an

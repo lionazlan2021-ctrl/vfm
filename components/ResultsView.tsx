@@ -9,12 +9,11 @@ import type { SearchResult, Listing } from "@/types";
 
 function prefersReducedMotion() {
   return (
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
   );
 }
 
-function useTypewriter(text: string, speed = 11) {
+function useTypewriter(text: string, speed = 9) {
   const [out, setOut] = useState("");
 
   useEffect(() => {
@@ -27,7 +26,6 @@ function useTypewriter(text: string, speed = 11) {
       setOut(text);
       return;
     }
-
     setOut("");
     let i = 0;
     const iv = setInterval(() => {
@@ -68,10 +66,9 @@ export default function ResultsView({
   const listings = [data.listing1, data.listing2, data.listing3].filter(Boolean) as Listing[];
 
   /**
-   * `recommendation` is 1-based and may point at any of the three listings —
-   * the whole premise of the product is that the best value isn't always the
-   * cheapest. It was previously ignored, and the badge was hardcoded to the
-   * first card. Falls back to the first listing when the model omits it.
+   * `recommendation` is 1-based and may point at any listing — the premise of
+   * the product is that the best value isn't always the cheapest. Falls back to
+   * the first listing when the model omits it.
    */
   const recommendedIndex =
     typeof data.recommendation === "number" &&
@@ -82,61 +79,55 @@ export default function ResultsView({
 
   if (listings.length === 0) {
     return (
-      <div className="max-w-[960px] mx-auto px-4 py-20 text-center">
-        <div className="text-[40px] mb-3.5" aria-hidden="true">
-          🔍
-        </div>
-        <div className="font-semibold mb-1.5" style={{ color: "#ddeede" }}>
-          No listings found
-        </div>
-        <p className="text-[13px] mb-5.5 max-w-[380px] mx-auto" style={{ color: "#3d5542" }}>
-          The search didn&apos;t turn up listings for &ldquo;{query}&rdquo;. Try a more specific
-          product name, like a brand and model number.
+      <div className="max-w-3xl mx-auto px-5 py-24">
+        <p className="eyebrow mb-4">No result</p>
+        <h1 className="display mb-3" style={{ fontSize: "2rem", color: "var(--ink)" }}>
+          We couldn&apos;t find listings for that
+        </h1>
+        <p className="text-[15px] leading-relaxed max-w-prose mb-7" style={{ color: "var(--ink-soft)" }}>
+          Nothing came back for &ldquo;{query}&rdquo;. A brand and model number usually works better
+          than a general description.
         </p>
-        <button onClick={onReset} className="btn-jade">
-          New Search
+        <button onClick={onReset} className="btn">
+          New search
         </button>
       </div>
     );
   }
 
+  const pick = listings[recommendedIndex];
+
   return (
-    <div className="max-w-[960px] mx-auto px-4 pb-24">
+    <div className="max-w-6xl mx-auto px-5 md:px-8 pb-24 pt-8">
       <Reveal>
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-3 pt-4">
+        <header className="flex items-start justify-between gap-6 flex-wrap mb-10">
           <div className="min-w-0">
-            <div
-              className="text-[10px] tracking-wider mb-0.5"
-              style={{ color: "#3d5542", fontFamily: "JetBrains Mono, monospace" }}
+            <p className="eyebrow mb-3">Comparison</p>
+            <h1
+              className="display break-words"
+              style={{ fontSize: "clamp(1.8rem, 3.6vw, 2.75rem)", color: "var(--ink)" }}
             >
-              PRICE COMPARISON
-            </div>
-            <h1 className="text-lg font-bold break-words" style={{ color: "#ddeede" }}>
-              &ldquo;{query}&rdquo;
+              {query}
             </h1>
             {data.productSummary && (
-              <p className="text-xs mt-0.5" style={{ color: "#8aaa8e" }}>
+              <p className="text-[14px] mt-3 max-w-prose" style={{ color: "var(--ink-soft)" }}>
                 {data.productSummary}
               </p>
             )}
           </div>
-          <button onClick={onReset} className="btn-ghost flex-shrink-0">
-            ← New Search
+          <button onClick={onReset} className="btn-quiet flex-shrink-0">
+            New search
           </button>
-        </div>
+        </header>
       </Reveal>
 
-      <div
-        className="grid gap-4 mb-5"
-        style={{ gridTemplateColumns: "repeat(auto-fit,minmax(270px,1fr))" }}
-      >
+      <div className="grid gap-5 md:gap-6" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(288px,1fr))" }}>
         {listings.map((l, i) => {
           const id = `${query}::${l.store}`;
           return (
             <SellerCard
               key={`${l.store}-${i}`}
               listing={l}
-              rank={i + 1}
               isRecommended={i === recommendedIndex}
               isSaved={savedIds.has(id)}
               onSave={() => onToggleSave(id, l)}
@@ -148,71 +139,77 @@ export default function ResultsView({
       </div>
 
       {data.verdict && (
-        <Reveal delay={0.1}>
-          <div
-            className="rounded-2xl px-5 py-4 mb-4"
-            style={{
-              background: "linear-gradient(135deg,rgba(45,190,95,0.07),rgba(45,190,95,0.03))",
-              border: "1px solid rgba(45,190,95,0.22)",
-            }}
-          >
-            <h2 className="text-[10px] font-bold tracking-wider mb-1.5" style={{ color: "#2dbe5f" }}>
-              ✦ VFM VERDICT
-            </h2>
-            {/* The full verdict is in the DOM from the start for assistive tech;
-                the typewriter only controls what is painted. */}
-            <p className="text-sm leading-loose" style={{ color: "#ddeede" }} aria-label={data.verdict}>
-              <span aria-hidden="true">
-                {verdictOut}
-                {verdictOut.length < data.verdict.length && (
-                  <span
-                    className="inline-block w-[2px] h-3.5 ml-0.5 align-middle"
-                    style={{ background: "#2dbe5f", animation: "blink .8s step-end infinite" }}
-                  />
+        <Reveal delay={0.08}>
+          <section className="panel mt-8 px-6 md:px-10 py-9 md:py-11">
+            <div className="grid lg:grid-cols-12 gap-5 lg:gap-10">
+              <div className="lg:col-span-3">
+                <p className="eyebrow mb-2">The verdict</p>
+                {pick && (
+                  <p className="display" style={{ fontSize: "1.5rem", color: "var(--accent)" }}>
+                    {pick.store}
+                  </p>
                 )}
-              </span>
-            </p>
-          </div>
+              </div>
+              <div className="lg:col-span-9">
+                {/* Full text is in the DOM for assistive tech; the typewriter
+                    only controls what is painted. */}
+                <p
+                  className="text-[16px] leading-relaxed max-w-prose"
+                  style={{ color: "var(--ink)" }}
+                  aria-label={data.verdict}
+                >
+                  <span aria-hidden="true">
+                    {verdictOut}
+                    {verdictOut.length < data.verdict.length && (
+                      <span
+                        className="inline-block w-[2px] h-4 ml-0.5 align-middle"
+                        style={{ background: "var(--accent)", animation: "blink .8s step-end infinite" }}
+                      />
+                    )}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </section>
         </Reveal>
       )}
 
-      <Reveal delay={0.15}>
-        <button
-          onClick={() => setShowTable((t) => !t)}
-          aria-expanded={showTable}
-          aria-controls="comparison-table"
-          className="w-full py-2.5 rounded-xl text-xs transition-all"
-          style={{
-            background: "rgba(45,190,95,0.05)",
-            border: "1px solid rgba(45,190,95,0.09)",
-            color: "#3d5542",
-            marginBottom: showTable ? 0 : 16,
-          }}
-        >
-          {showTable ? "▲ Hide" : "▼ Show"} Full Comparison Table
-        </button>
-        {showTable && (
-          <div
-            id="comparison-table"
-            className="rounded-[14px] p-4 mb-4"
+      <Reveal delay={0.1}>
+        <div className="mt-8">
+          <button
+            onClick={() => setShowTable((t) => !t)}
+            aria-expanded={showTable}
+            aria-controls="comparison-table"
+            className="w-full flex items-center justify-between py-3.5 text-[13px]"
             style={{
-              background: "#111815",
-              border: "1px solid rgba(45,190,95,0.09)",
-              animation: "fadeUp .3s ease",
+              borderTop: "1px solid var(--rule)",
+              borderBottom: showTable ? "none" : "1px solid var(--rule)",
+              color: "var(--ink-soft)",
+              background: "none",
             }}
           >
-            <CompTable listings={listings} recommendedIndex={recommendedIndex} />
-          </div>
-        )}
+            <span>Compare every detail side by side</span>
+            <span aria-hidden="true" style={{ color: "var(--ink-mute)" }}>
+              {showTable ? "–" : "+"}
+            </span>
+          </button>
+          {showTable && (
+            <div id="comparison-table" className="pb-6" style={{ animation: "riseIn .3s ease both" }}>
+              <CompTable listings={listings} recommendedIndex={recommendedIndex} />
+            </div>
+          )}
+        </div>
       </Reveal>
 
-      <Reveal delay={0.2}>
-        <FollowUpChat
-          productContext={data}
-          originalQuery={query}
-          isLoggedIn={isLoggedIn}
-          onRequireLogin={onRequireLogin}
-        />
+      <Reveal delay={0.14}>
+        <div className="mt-10">
+          <FollowUpChat
+            productContext={data}
+            originalQuery={query}
+            isLoggedIn={isLoggedIn}
+            onRequireLogin={onRequireLogin}
+          />
+        </div>
       </Reveal>
     </div>
   );

@@ -96,15 +96,38 @@ Now open `.env` in any text editor (Notepad, TextEdit, VS Code) and:
    - **Mac/Linux terminal:** `openssl rand -base64 32`
    - **Windows:** go to **https://generate-secret.vercel.app/32** and copy the result
    - Paste whatever it gives you in place of the placeholder text
-3. Leave `DATABASE_URL="file:./dev.db"` as-is for now — that's correct for testing on your computer
+3. Set `DATABASE_URL` to a real Postgres connection string — see 2.6 below
 4. Save the file
 
-### 2.6 About the local database
-There's nothing to do here — `npm run dev` in the next step creates a small
-database file on your computer automatically, so signup/login/saved products
-work. You'll see it mention "migrations" the first time; that's expected.
+### 2.6 Set up the database
+This project's schema targets Postgres, both locally and in production — there
+is no zero-setup SQLite fallback. You need one cloud database before the site
+will run anywhere, including on your own computer.
 
-(If you ever want to do it separately, `npm run db:setup` does the same thing.)
+1. Go to **https://supabase.com** (or **https://neon.tech** — both work) and
+   sign up
+2. Create a new project (any name)
+3. Find the connection string — in Supabase, click **Connect** near the top of
+   the project page, choose the **Direct connection** tab, and copy the URI.
+   It looks like:
+   ```
+   postgresql://postgres:[YOUR-PASSWORD]@db.xxxx.supabase.co:5432/postgres
+   ```
+4. Replace `[YOUR-PASSWORD]` with your actual database password (the one you
+   set when creating the project) and paste the whole string into
+   `DATABASE_URL` in `.env`
+5. Create the tables:
+   ```
+   npm run db:setup
+   ```
+   This applies the committed migrations in `prisma/migrations/` to your
+   database. Safe to re-run — already-applied migrations are skipped.
+
+You're using one database for both local development and production. That's
+fine for a solo project — test accounts and real accounts share one table,
+which is simplest until you outgrow it. If you'd rather keep them separate,
+create a second Supabase/Neon project for local dev and point your local
+`.env` at that one instead; use the same steps above.
 
 > No Anthropic key yet, or want to avoid spending anything while you look
 > around? Set `VFM_MOCK_SEARCH=1` in `.env`. Searches then return fixed example
@@ -168,96 +191,33 @@ and add these three, one at a time (Name → Value → Add):
 |---|---|
 | `ANTHROPIC_API_KEY` | the same real key from step 2.4 |
 | `AUTH_SECRET` | the same secret from step 2.5 |
-| `DATABASE_URL` | see step 3.4 below — come back to this after setting up a real database |
+| `DATABASE_URL` | the same Postgres connection string from step 2.6 |
 
-### 3.4 Set up a real production database
-SQLite (the file-based database) only works on your own computer — it won't
-work on Vercel because Vercel doesn't keep files between requests. You need a
-real cloud database. The easiest free option:
+Production uses the same database you already set up for local development —
+no separate database step needed here. (If you'd rather keep production data
+separate from local testing, create a second Supabase/Neon project and use
+its connection string here instead; the tables get created automatically the
+first time you run `npm run db:setup` against it locally.)
 
-1. Go to **https://neon.tech** (or **https://supabase.com** — both work, Neon is slightly simpler for this)
-2. Sign up, create a new project (any name, e.g. "vfm-production")
-3. Once created, find the **Connection String** (sometimes called "Connection Details") — it looks like:
-   ```
-   postgresql://user:password@host.neon.tech/dbname?sslmode=require
-   ```
-4. Copy that entire string
-5. Back in Vercel's environment variables (step 3.3), set `DATABASE_URL` to this value
-
-Now switch the project over to Postgres. **Follow all four steps** — changing
-only the provider line is not enough, and step 3.4b is the one people miss.
-
-**3.4a — Change the database type.** Open `prisma/schema.prisma` and change:
-```
-provider = "sqlite"
-```
-to:
-```
-provider = "postgresql"
-```
-
-**3.4b — Rebuild the migration files for Postgres.**
-
-The files in `prisma/migrations/` were written for SQLite and use SQLite-only
-types (`DATETIME`, which Postgres does not have). Handing them to Postgres fails
-with a syntax error. You need to regenerate them:
-
-1. Delete the whole `prisma/migrations` folder.
-   - **Mac/Linux:** `rm -rf prisma/migrations`
-   - **Windows:** delete the folder in File Explorer
-2. In your local `.env`, temporarily change `DATABASE_URL` to the **Neon/Supabase
-   connection string** you copied above (keep a note of the old `file:./dev.db`
-   value if you want to go back to local development later).
-3. Run:
-   ```
-   npx prisma migrate dev --name init
-   ```
-   This writes fresh Postgres-flavoured migration files **and** creates the
-   tables in your real database at the same time. That means step 3.6 below is
-   already done.
-
-**3.4c — Put your local database setting back** (optional, but it lets you keep
-developing locally): change `DATABASE_URL` in `.env` back to
-`file:./dev.db`. Note that with the provider now set to `postgresql`, local
-SQLite development no longer works — see "Going back to local development"
-at the end of this file if you need it.
-
-**3.4d — Commit and push:**
-```
-git add .
-git commit -m "Switch to Postgres for production"
-git push
-```
-
-### 3.5 Deploy
+### 3.4 Deploy
 Back on the Vercel import screen (or the project dashboard if you already
 clicked deploy once), click **Deploy**.
 
 Vercel will build your project. This takes 1–3 minutes. Watch the log — if it
 finishes with a green checkmark, you're live.
 
-### 3.6 Set up the production database tables
-
-**If you followed step 3.4b, this is already done** — `prisma migrate dev`
-created the tables (User, Search, SavedProduct, TrackedProduct) at the same time
-as it wrote the migration files. You can skip to 3.7.
-
-To confirm, or if you skipped it: with `DATABASE_URL` in your local `.env`
-temporarily set to the Neon/Supabase connection string, run:
-```
-npx prisma migrate deploy
-```
-This applies any migrations the database doesn't have yet. It is safe to run
-more than once — already-applied migrations are skipped.
+### 3.5 The database tables are already there
+If you ran `npm run db:setup` in step 2.6 against the same connection string
+you put in Vercel, the tables already exist — nothing else to do here.
 
 From now on, any time you change `prisma/schema.prisma`, run
-`npx prisma migrate dev --name describe-your-change` locally, then commit the new
-file in `prisma/migrations/` and push. Vercel applies it on the next deploy.
+`npx prisma migrate dev --name describe-your-change` locally (against the same
+database Vercel uses, per step 3.3) — this both writes the migration file and
+applies it. Commit the new file in `prisma/migrations/` and push. Vercel's
+build only runs `prisma generate`, not `migrate deploy`, so the table change
+itself has to happen from your machine as shown here, not just from a push.
 
-> **If you get `type "DATETIME" does not exist`,** the old SQLite migration files
-> are still in `prisma/migrations/`. Go back and do step 3.4b.
-
-### 3.7 Visit your live site
+### 3.6 Visit your live site
 Vercel gives you a URL like `https://vfm-website-yourname.vercel.app`. Open it
 in a browser — on your phone, on a friend's computer, anywhere. It's now a
 real, published website.
@@ -283,9 +243,9 @@ your Vercel project → Settings → Environment Variables and double-check all
 three are set correctly, then redeploy (Deployments tab → "..." menu → Redeploy).
 
 **Signup/login doesn't work on the live site**
-→ Check that `DATABASE_URL` in Vercel points to your real Postgres database
-(not the local SQLite path), and that you ran `npx prisma migrate deploy`
-against that same database (step 3.6).
+→ Check that `DATABASE_URL` in Vercel matches the connection string you ran
+`npm run db:setup` against (step 3.5) — a typo'd string means Vercel is
+pointed at a database with no tables in it.
 
 **AI search returns an error**
 → Check your Anthropic billing page — API keys stop working if there's no
@@ -310,25 +270,9 @@ Set it to `0` and restart to get live results.
 for logged-out visitors, 30 for logged-in accounts. Log in, or wait an hour.
 The numbers live in `LIMITS` in `lib/rate-limit.ts` if you want to change them.
 
-**`type "DATETIME" does not exist` when setting up the production database**
-→ The SQLite migration files are still present. See step 3.4b.
-
----
-
-## Going back to local development after switching to Postgres
-
-Once `prisma/schema.prisma` says `provider = "postgresql"`, the local SQLite
-file no longer works — Prisma needs the provider to match the database. Two
-options:
-
-- **Simplest:** keep using the cloud database for local development too. Leave
-  `DATABASE_URL` in your local `.env` set to the Neon/Supabase string. Your local
-  and live sites then share one database, so test accounts show up on both.
-- **Keep them separate:** create a second free Neon project (e.g. "vfm-dev") and
-  point your local `.env` at that one instead. Your live site keeps its own data.
-
-Switching the provider line back to `sqlite` also works, but then you'd have to
-regenerate the migration files again — it isn't worth it once you're live.
+**"the URL must start with the protocol `postgresql://`" or similar**
+→ `DATABASE_URL` still has the old `file:./dev.db` value, or a typo. Check
+step 2.6.
 
 ---
 

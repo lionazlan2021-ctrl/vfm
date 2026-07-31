@@ -24,7 +24,7 @@ sticker price.
 |---|---|
 | AI search & chat | A real `ANTHROPIC_API_KEY` in `.env` (or `VFM_MOCK_SEARCH=1` to use sample data) |
 | Login/signup sessions | A real `AUTH_SECRET` in `.env` |
-| Saved products / history persistence in production | A real Postgres `DATABASE_URL` (SQLite works for local dev only) |
+| Saved products / history persistence | A real Postgres `DATABASE_URL` — required locally too, no SQLite fallback |
 | Live deployment | A Vercel (or similar) account |
 
 See **SETUP.md** for the full step-by-step guide, including how to get each of these.
@@ -33,7 +33,7 @@ See **SETUP.md** for the full step-by-step guide, including how to get each of t
 
 - **Frontend:** Next.js 15 (App Router), React 18, TypeScript, Tailwind CSS
 - **Backend:** Next.js API Routes (Node.js runtime)
-- **Database:** Prisma ORM, SQLite (dev) / PostgreSQL (production)
+- **Database:** Prisma ORM, PostgreSQL (dev and production — see SETUP.md 2.6 for a free hosted instance)
 - **AI:** Anthropic Claude API (`claude-sonnet-5`) with the `web_search` tool
 - **Auth:** bcrypt password hashing + JWT session cookies (no third-party auth provider required)
 
@@ -41,15 +41,15 @@ See **SETUP.md** for the full step-by-step guide, including how to get each of t
 
 ```bash
 npm install
-cp .env.example .env       # then fill in ANTHROPIC_API_KEY and AUTH_SECRET
+cp .env.example .env       # then fill in DATABASE_URL, ANTHROPIC_API_KEY, and AUTH_SECRET
 npm run dev
 ```
 
 Visit `http://localhost:3000`.
 
-`npm run dev` applies any pending database migrations before starting, so the
-local SQLite database is created for you on first run — there is no separate
-setup step.
+`DATABASE_URL` needs a real Postgres connection string before this works — see
+SETUP.md section 2.6 for how to get a free one. `npm run dev` applies any
+pending migrations against it before starting.
 
 ### Working without an API key
 

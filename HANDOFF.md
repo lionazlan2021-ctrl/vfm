@@ -13,7 +13,7 @@ VFM (Value For Money) is an AI-powered shopping comparison site. Users search fo
 - **Scoring:** Price, condition, seller trust, shipping, warranty, and delivery time are all weighted; cheap + sketchy never beats expensive + trustworthy
 - **Plans:** Free (Sonnet 5, 15/mo), Pro (Opus 4.8, 200/mo), Premium (Opus 5, 1000/mo)
 - **Auth:** JWT + bcrypt; no OAuth, no third-party auth
-- **Database:** Prisma ORM; SQLite for dev, PostgreSQL for production
+- **Database:** Prisma ORM; PostgreSQL for both dev and production (Supabase)
 
 ---
 
@@ -25,7 +25,7 @@ VFM (Value For Money) is an AI-powered shopping comparison site. Users search fo
 | **Backend** | Next.js API routes, Prisma ORM, Anthropic Claude API |
 | **Auth** | bcryptjs + jose (JWT cookies) |
 | **Validation** | Zod |
-| **Database** | SQLite (dev) / PostgreSQL (prod) |
+| **Database** | PostgreSQL (Supabase) — same database for dev and prod |
 | **Type Safety** | TypeScript strict mode |
 
 ---
@@ -234,7 +234,7 @@ Plan is read from the database, so reloading the page shows the new quota.
 
 ```bash
 npm install
-npm run db:setup          # Create SQLite DB and run migrations
+npm run db:setup          # Apply migrations to DATABASE_URL (Postgres — required, no SQLite fallback)
 npm run dev               # Runs on http://localhost:3100
 ```
 

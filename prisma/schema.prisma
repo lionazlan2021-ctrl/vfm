@@ -1,20 +1,15 @@
 // VFM.com — Database Schema
 //
-// Provider is SQLite for zero-setup local development.
-//
-// SWITCHING TO POSTGRES FOR PRODUCTION
-// Change `provider` below to "postgresql" and point DATABASE_URL at your
-// Postgres connection string. Because migrations are generated per provider,
-// the committed SQLite migrations in prisma/migrations/ will NOT apply to
-// Postgres — see the "Switching to Postgres" section of SETUP.md for the exact
-// steps. Changing this line alone is not enough.
+// Provider is Postgres (production). Local dev also points at Postgres now —
+// see "Going back to local development after switching to Postgres" in
+// SETUP.md if you want SQLite back for offline local work.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite" // change to "postgresql" for production — see SETUP.md
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

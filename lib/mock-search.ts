@@ -5,7 +5,7 @@ import type { ParsedSearchResult } from "./ai";
  *
  * This exists so the whole product — results, comparison table, save, track,
  * history, chat — can be exercised end to end without spending money on
- * Anthropic calls. The shape matches exactly what `searchProducts` returns from
+ * Gemini calls. The shape matches exactly what `searchProducts` returns from
  * a live call, so nothing downstream can tell the difference.
  *
  * The numbers below are invented for development. They are deliberately NOT

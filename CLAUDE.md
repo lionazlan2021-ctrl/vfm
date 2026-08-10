@@ -9,7 +9,7 @@ cheapest," but which one is actually worth its price once you weigh price, condi
 seller trust, warranty, shipping, and return terms against each other.
 
 This repo already contains a working first build (Next.js 15 + TypeScript + Prisma +
-Anthropic API). It is **not a mockup** — search, auth, saving, price tracking, and chat
+Gemini API). It is **not a mockup** — search, auth, saving, price tracking, and chat
 are all wired to real backend logic. Your job is to take this from "working build" to
 "polished, correct, production-ready product." Do not throw away the existing
 architecture — audit it, fix what's broken, finish what's incomplete, and raise the
@@ -23,7 +23,7 @@ can run `npm install && npm run dev` and get a fully working site with no consol
 errors, no broken flows, and no placeholder content. Specifically:
 
 1. **Audit first.** Read every file in `app/`, `components/`, `lib/`, `prisma/`, and
-   `types/`. Run the app locally (you'll need a real `ANTHROPIC_API_KEY` — ask the user
+   `types/`. Run the app locally (you'll need a real `GEMINI_API_KEY` — ask the user
    for one if it's not in `.env`, or clearly stub/mock search responses behind a flag
    so you can test UI without burning API calls). Note every bug, dead prop, unhandled
    error state, and inconsistency between what a component expects and what an API
@@ -34,7 +34,7 @@ errors, no broken flows, and no placeholder content. Specifically:
    not just render.
 3. **Harden the API routes** in `app/api/*`: input validation (zod is already a
    dependency — use it), consistent error shapes, proper HTTP status codes, rate
-   limiting on the search endpoint (the Anthropic API call costs real money per
+   limiting on the search endpoint (the Gemini API call costs real money per
    request — an unauthenticated user should not be able to hammer it), and no leaking
    of stack traces or internal errors to the client.
 4. **Improve the AI evaluation logic** in `lib/ai.ts` using the prompt spec below —
@@ -140,7 +140,7 @@ rather than freelancing.
 
 - Next.js 15 (App Router), React 18, TypeScript, Tailwind CSS
 - Prisma ORM — SQLite for local dev, PostgreSQL for production
-- Anthropic Claude API with the `web_search` tool for live product search
+- Google Gemini API with Google Search grounding for live product search
 - bcrypt + JWT (`jose`) cookie sessions for auth — no third-party auth provider
 
 ## Reference

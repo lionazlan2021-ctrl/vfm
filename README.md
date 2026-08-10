@@ -8,9 +8,9 @@ sticker price.
 
 ## What's real in this codebase
 
-- **Search** — calls the Anthropic API with live web search enabled (`app/api/search/route.ts`, `lib/ai.ts`). Not mock data.
+- **Search** — calls the Gemini API with Google Search grounding enabled (`app/api/search/route.ts`, `lib/ai.ts`). Not mock data.
 - **Value-for-money scoring** — the model must justify each 1–10 score with the specific tradeoff it weighed, and the listing it recommends is often *not* the cheapest one.
-- **Image upload** — real product identification via Claude's vision capability.
+- **Image upload** — real product identification via Gemini's vision capability.
 - **Follow-up chat** — grounded in the listing data from the original search; says when something is outside that data instead of guessing.
 - **Authentication** — email/password signup and login with hashed passwords (bcrypt) and signed session cookies (JWT via `jose`).
 - **Database** — Prisma schema for users, search history, saved products, and price tracking.
@@ -22,7 +22,7 @@ sticker price.
 
 | Feature | Requires |
 |---|---|
-| AI search & chat | A real `ANTHROPIC_API_KEY` in `.env` (or `VFM_MOCK_SEARCH=1` to use sample data) |
+| AI search & chat | A real `GEMINI_API_KEY` in `.env` (or `VFM_MOCK_SEARCH=1` to use sample data) |
 | Login/signup sessions | A real `AUTH_SECRET` in `.env` |
 | Saved products / history persistence | A real Postgres `DATABASE_URL` — required locally too, no SQLite fallback |
 | Live deployment | A Vercel (or similar) account |
@@ -34,14 +34,14 @@ See **SETUP.md** for the full step-by-step guide, including how to get each of t
 - **Frontend:** Next.js 15 (App Router), React 18, TypeScript, Tailwind CSS
 - **Backend:** Next.js API Routes (Node.js runtime)
 - **Database:** Prisma ORM, PostgreSQL (dev and production — see SETUP.md 2.6 for a free hosted instance)
-- **AI:** Anthropic Claude API (`claude-sonnet-5`) with the `web_search` tool
+- **AI:** Google Gemini API (`gemini-2.5-flash`) with Google Search grounding
 - **Auth:** bcrypt password hashing + JWT session cookies (no third-party auth provider required)
 
 ## Local development
 
 ```bash
 npm install
-cp .env.example .env       # then fill in DATABASE_URL, ANTHROPIC_API_KEY, and AUTH_SECRET
+cp .env.example .env       # then fill in DATABASE_URL, GEMINI_API_KEY, and AUTH_SECRET
 npm run dev
 ```
 
@@ -53,7 +53,7 @@ pending migrations against it before starting.
 
 ### Working without an API key
 
-Every Anthropic call costs money. To build and test the UI without spending
+Every Gemini call costs money. To build and test the UI without spending
 anything, set this in `.env`:
 
 ```
@@ -94,7 +94,7 @@ runs the search, how much reasoning effort it spends, and the monthly allowance:
 |---|---|---|---|
 | Price | $0 | $12/mo | $29/mo |
 | Searches | 15/month | 200/month | 1,000/month |
-| Model | `claude-sonnet-5` | `claude-opus-4-8` | `claude-opus-5` |
+| Model | `gemini-2.5-flash` | `gemini-2.5-pro` | `gemini-2.5-pro` |
 | Reasoning effort | medium | high | xhigh |
 | Follow-up chat | 20/hour | 60/hour | 200/hour |
 
@@ -138,15 +138,17 @@ Redis `INCR` + `EXPIRE` on the same key — nothing else needs to change.
 ## Changing the AI model
 
 The model is set in `lib/ai.ts` and can be overridden with the `VFM_MODEL`
-environment variable. Two constraints before you change it:
+environment variable. One constraint before you change it:
 
-1. It must support the **`web_search` server tool**, or product search returns nothing.
-2. `lib/ai.ts` uses **adaptive thinking** (`thinking: { type: "adaptive" }`) and
-   `output_config.effort`. Older models reject both.
+1. It must support **Google Search grounding** (the `googleSearch` tool), or
+   product search returns nothing. As of writing, the `gemini-2.5-*` family
+   supports this; check Google's model docs before pinning an older or newer
+   model.
 
-Search also handles two responses the API can return that are easy to miss:
-`pause_turn` (the web-search loop paused and must be resumed — otherwise you get
-a truncated, unparseable answer) and `refusal`.
+Reasoning effort is controlled per-plan (`lib/plans.ts`) via Gemini's
+`thinkingConfig.thinkingBudget` — `0` disables thinking, `-1` lets the model
+decide its own budget, and any positive number is a hard token cap. See
+`effortToThinkingBudget` in `lib/ai.ts` for the mapping.
 
 ## Design
 
@@ -196,7 +198,7 @@ app/
     history/[id]/route.ts   — GET/DELETE: replay or remove one stored result
 components/                 — all UI components (cards, chat, sidebar, etc.)
 lib/
-  ai.ts                     — Anthropic integration, prompts, response schema
+  ai.ts                     — Gemini integration, prompts, response schema
   mock-search.ts            — sample results for VFM_MOCK_SEARCH=1
   plans.ts                  — tier definitions (model, effort, quotas, price)
   usage.ts                  — monthly quota accounting

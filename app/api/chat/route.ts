@@ -8,7 +8,7 @@ import { apiError, handle, readJson } from "@/lib/http";
 import { callerKey, hit, LIMITS, rateLimitHeaders } from "@/lib/rate-limit";
 
 /**
- * Follow-up chat is a paid Anthropic call, so it requires a session. Previously
+ * Follow-up chat is a paid Gemini call, so it requires a session. Previously
  * this route had no auth check and no rate limit at all, which left an
  * unauthenticated, unmetered path straight to the API.
  */

@@ -144,7 +144,7 @@ function VFMApp() {
    * Reopens a past search from storage.
    *
    * The sidebar used to call `doSearch` with the old query text, which ran a
-   * fresh paid Anthropic search every time you clicked your own history. The
+   * fresh paid Gemini search every time you clicked your own history. The
    * result was already in the database; this reads it back.
    */
   const openHistoryEntry = useCallback(

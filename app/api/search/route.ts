@@ -9,7 +9,7 @@ import { getPlan } from "@/lib/plans";
 import { getUsage, formatResetDate } from "@/lib/usage";
 
 /**
- * Roughly 3.4 MB of original image once base64 is decoded. Anthropic accepts up
+ * Roughly 3.4 MB of original image once base64 is decoded. Gemini accepts up
  * to 5 MB per image; staying under that avoids paying for a request that will
  * be rejected anyway.
  */
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     const session = await getCurrentSession();
 
     // Anonymous visitors get a much smaller allowance than signed-in users:
-    // every call here is a paid Anthropic web search.
+    // every call here is a paid Gemini search.
     const { limit, windowSeconds } = session ? LIMITS.searchUser : LIMITS.searchAnon;
     const rl = hit(callerKey(req, session?.userId), limit, windowSeconds);
     if (!rl.ok) {

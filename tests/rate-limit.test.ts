@@ -83,7 +83,7 @@ describe("rateLimitHeaders", () => {
 
 describe("configured limits", () => {
   // Anonymous callers must be capped harder than signed-in ones: every search
-  // is a paid Anthropic call and anonymous traffic is unattributable.
+  // is a paid Gemini call and anonymous traffic is unattributable.
   test("anonymous search allowance is stricter than the signed-in allowance", () => {
     assert.ok(LIMITS.searchAnon.limit < LIMITS.searchUser.limit);
   });

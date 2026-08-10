@@ -1,13 +1,16 @@
 /**
  * Subscription plans.
  *
- * A plan controls three things: which Claude model runs the search, how much
- * reasoning effort it spends, and how many searches are included each month.
+ * A plan controls three things: which Gemini model runs the search, how much
+ * reasoning effort (thinking budget) it spends, and how many searches are
+ * included each month.
  *
- * Every search is a paid Anthropic call with live web search, so the quota is
- * the real cost control — the model and effort settings mostly change answer
- * quality. Note Opus 4.8 and Opus 5 cost the same per token, so the gap between
- * Pro and Premium is deliberately quota + effort, not just the model name.
+ * Every search is a paid Gemini call with Google Search grounding, so the
+ * quota is the real cost control — the model and effort settings mostly
+ * change answer quality. The gap between Pro and Premium is the same model
+ * at a higher thinking budget plus a larger quota, not a different model
+ * name — swap in a stronger model here if/when one becomes worth the cost
+ * difference.
  *
  * Billing is not wired up. `plan` is a field on the User row that an admin (or
  * a future Stripe webhook) can set; nothing here collects money.
@@ -21,7 +24,7 @@ export type Plan = {
   /** Monthly price in USD. 0 for the free tier. */
   price: number;
   tagline: string;
-  /** Claude model used for search and follow-up chat. */
+  /** Gemini model used for search and follow-up chat. */
   model: string;
   /** Reasoning effort for product search. Higher = better judgement, more tokens. */
   searchEffort: "low" | "medium" | "high" | "xhigh";
@@ -39,7 +42,7 @@ export const PLANS: Record<PlanId, Plan> = {
     name: "Free",
     price: 0,
     tagline: "Enough to settle a purchase you're on the fence about.",
-    model: "claude-sonnet-5",
+    model: "gemini-2.5-flash",
     searchEffort: "medium",
     searchesPerMonth: 15,
     chatPerHour: 20,
@@ -56,7 +59,7 @@ export const PLANS: Record<PlanId, Plan> = {
     name: "Pro",
     price: 12,
     tagline: "For people who research before every purchase.",
-    model: "claude-opus-4-8",
+    model: "gemini-2.5-pro",
     searchEffort: "high",
     searchesPerMonth: 200,
     chatPerHour: 60,
@@ -73,13 +76,13 @@ export const PLANS: Record<PlanId, Plan> = {
     name: "Premium",
     price: 29,
     tagline: "For high-value buys where being wrong is expensive.",
-    model: "claude-opus-5",
+    model: "gemini-2.5-pro",
     searchEffort: "xhigh",
     searchesPerMonth: 1000,
     chatPerHour: 200,
     features: [
       "1,000 product searches a month",
-      "Our most capable model, at maximum reasoning effort",
+      "Maximum reasoning effort on every search",
       "Best results on complex or high-ticket comparisons",
       "Priority handling when demand is high",
       "Everything in Pro",

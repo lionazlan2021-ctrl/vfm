@@ -25,7 +25,7 @@ keeping rather than deleting if they ever start failing:
 
 - **`trimHistoryForApi` drops the seeded assistant greeting.** The chat UI opens
   with an assistant message. It used to be forwarded to the API as the first
-  turn, which Anthropic rejects — every *first* follow-up question failed.
+  turn, which the API rejects — every *first* follow-up question failed.
 - **`extractJSON` is not confused by a brace in trailing prose.** The old version
   took everything between the first `{` and the last `}`, so any stray brace after
   the JSON broke parsing.
@@ -46,8 +46,8 @@ npm run check      # typecheck + lint + tests
 Run through this after any change to search, auth, or the database.
 
 **Setup:** put `VFM_MOCK_SEARCH=1` in `.env` to do the whole pass without
-spending money. Do at least one pass with a real `ANTHROPIC_API_KEY` and
-`VFM_MOCK_SEARCH=0` before deploying, since mock mode never calls Anthropic.
+spending money. Do at least one pass with a real `GEMINI_API_KEY` and
+`VFM_MOCK_SEARCH=0` before deploying, since mock mode never calls Gemini.
 
 ```bash
 npm run db:setup && npm run dev
@@ -136,7 +136,7 @@ npm run db:setup && npm run dev
 
 ### 13. Error handling
 - [ ] Stop the dev server mid-search — a readable error, no stack trace on screen
-- [ ] Set `ANTHROPIC_API_KEY` to a bogus value and unset `VFM_MOCK_SEARCH` — a clear
+- [ ] Set `GEMINI_API_KEY` to a bogus value and unset `VFM_MOCK_SEARCH` — a clear
       "AI service isn't configured" message rather than a 500
 - [ ] Visit `/nonexistent-page` — the styled 404 renders
 

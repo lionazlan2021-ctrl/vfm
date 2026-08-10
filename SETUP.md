@@ -66,15 +66,14 @@ npm install
 ```
 This downloads everything the project needs. It can take 1–3 minutes. You'll see a lot of text scroll by — that's normal.
 
-### 2.4 Get a real Anthropic API key (this powers the AI)
+### 2.4 Get a real Gemini API key (this powers the AI)
 The AI search and chat features need this. Without it, search will return an error.
 
-1. Go to **https://console.anthropic.com**
-2. Sign up / log in
-3. Click **Settings → API Keys** (or **Get API Keys** on the dashboard)
-4. Click **Create Key**, give it any name (e.g. "VFM website")
-5. Copy the key — it starts with `sk-ant-...`. **Save it somewhere safe — you can't view it again after closing this screen.**
-6. Note: Anthropic API usage is billed by usage (pay-as-you-go), not a flat subscription. Check **https://console.anthropic.com/settings/billing** to add a payment method and see current pricing — this is required before the key will work for live requests.
+1. Go to **https://aistudio.google.com/apikey**
+2. Sign in with a Google account
+3. Click **Create API key**, choose or create a Google Cloud project when prompted
+4. Copy the key.
+5. Note: Gemini API usage is billed by usage (pay-as-you-go) once you exceed the free tier. Check **https://aistudio.google.com/apikey** for current limits and pricing, and enable billing on the linked Google Cloud project before relying on it for production traffic.
 
 ### 2.5 Create your environment file
 In the project folder, find the file called `.env.example`. Make a copy of it
@@ -108,11 +107,16 @@ will run anywhere, including on your own computer.
    sign up
 2. Create a new project (any name)
 3. Find the connection string — in Supabase, click **Connect** near the top of
-   the project page, choose the **Direct connection** tab, and copy the URI.
-   It looks like:
+   the project page, and under **Connection Method** choose **Session
+   pooler**, not "Direct connection". Copy the URI. It looks like:
    ```
-   postgresql://postgres:[YOUR-PASSWORD]@db.xxxx.supabase.co:5432/postgres
+   postgresql://postgres.xxxx:[YOUR-PASSWORD]@aws-0-<region>.pooler.supabase.com:5432/postgres
    ```
+   Supabase's "Direct connection" is IPv6-only unless you pay for their IPv4
+   add-on, which breaks on most laptops and always breaks on Vercel (IPv4-only
+   by default) — you'll get `P1001: Can't reach database server`. Session
+   pooler avoids this and, unlike Transaction pooler, still supports the
+   advisory locks Prisma's migration tool needs.
 4. Replace `[YOUR-PASSWORD]` with your actual database password (the one you
    set when creating the project) and paste the whole string into
    `DATABASE_URL` in `.env`
@@ -129,7 +133,7 @@ which is simplest until you outgrow it. If you'd rather keep them separate,
 create a second Supabase/Neon project for local dev and point your local
 `.env` at that one instead; use the same steps above.
 
-> No Anthropic key yet, or want to avoid spending anything while you look
+> No Gemini key yet, or want to avoid spending anything while you look
 > around? Set `VFM_MOCK_SEARCH=1` in `.env`. Searches then return fixed example
 > results instantly and for free — everything else (signup, saving, history,
 > chat) still works. See "Working on the site without spending money" near the
@@ -189,7 +193,7 @@ and add these three, one at a time (Name → Value → Add):
 
 | Name | Value |
 |---|---|
-| `ANTHROPIC_API_KEY` | the same real key from step 2.4 |
+| `GEMINI_API_KEY` | the same real key from step 2.4 |
 | `AUTH_SECRET` | the same secret from step 2.5 |
 | `DATABASE_URL` | the same Postgres connection string from step 2.6 |
 
@@ -248,15 +252,16 @@ three are set correctly, then redeploy (Deployments tab → "..." menu → Redep
 pointed at a database with no tables in it.
 
 **AI search returns an error**
-→ Check your Anthropic billing page — API keys stop working if there's no
-payment method on file or you've hit a spending limit.
+→ Check your Gemini API billing/quota page at https://aistudio.google.com/apikey —
+keys stop working if you've hit a rate limit or free-tier quota with no billing
+enabled.
 
 **Changes I make locally don't show up on the live site**
 → You need to `git push` your changes. Vercel automatically redeploys every
 time you push to the `main` branch on GitHub.
 
 **"The AI service isn't configured yet"**
-→ Your `ANTHROPIC_API_KEY` is missing or still the placeholder. Changes to
+→ Your `GEMINI_API_KEY` is missing or still the placeholder. Changes to
 `.env` only take effect after restarting the server (Ctrl+C, then `npm run dev`).
 If you just want to look at the site without a key, set `VFM_MOCK_SEARCH=1`
 instead — see below.
@@ -302,7 +307,7 @@ above keeps working.
 
 ## Working on the site without spending money
 
-Every AI search costs a small amount on your Anthropic account. While you're
+Every AI search costs a small amount on your Gemini account. While you're
 changing the design or testing signup and saving, you can turn the AI off:
 
 1. In `.env`, set `VFM_MOCK_SEARCH=1`

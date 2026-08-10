@@ -8,7 +8,7 @@ import { SearchResultSchema } from "@/lib/ai";
  * Replays a stored search result.
  *
  * Search results were being written to the database and never read back: the
- * sidebar re-ran the whole query through Anthropic, so opening your own history
+ * sidebar re-ran the whole query through Gemini, so opening your own history
  * cost money every time. This returns the saved result instead.
  */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {

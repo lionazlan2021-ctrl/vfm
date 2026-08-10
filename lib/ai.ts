@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI, FinishReason, ApiError as GeminiApiError } from "@google/genai";
 import { z } from "zod";
 import { ApiError } from "./errors";
 import { mockSearch } from "./mock-search";
@@ -6,20 +6,10 @@ import { mockSearch } from "./mock-search";
 /**
  * Default model, used when no plan is supplied (and by the follow-up chat).
  * Each subscription tier overrides this — see `lib/plans.ts`.
- *
- * The previous pin here was `claude-sonnet-4-20250514`, which is deprecated —
- * see README "Changing the AI model" before editing this.
  */
-const MODEL = process.env.VFM_MODEL || "claude-sonnet-5";
+const MODEL = process.env.VFM_MODEL || "gemini-2.5-flash";
 
-/**
- * Anthropic's live web-search tool. The `_20260209` variant adds dynamic
- * filtering: results are filtered before they reach the context window, which
- * makes searches both more accurate and cheaper.
- */
-const WEB_SEARCH_TOOL = { type: "web_search_20260209", name: "web_search" } as const;
-
-/** Media types Anthropic's vision API accepts. Anything else is rejected up front. */
+/** Media types Gemini's vision input accepts. Anything else is rejected up front. */
 export const SUPPORTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
 export type SupportedImageType = (typeof SUPPORTED_IMAGE_TYPES)[number];
 
@@ -33,14 +23,14 @@ export function isMockMode(): boolean {
 }
 
 function getClient() {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey.includes("REPLACE")) {
     throw new ApiError(
       "ai_misconfigured",
-      "The AI service isn't configured yet. Add a real ANTHROPIC_API_KEY to .env, or set VFM_MOCK_SEARCH=1 to use sample data."
+      "The AI service isn't configured yet. Add a real GEMINI_API_KEY to .env, or set VFM_MOCK_SEARCH=1 to use sample data."
     );
   }
-  return new Anthropic({ apiKey });
+  return new GoogleGenAI({ apiKey });
 }
 
 // ---------------------------------------------------------------------------
@@ -88,10 +78,10 @@ PROCESS
 1. Identify the exact product from the user's query or image (brand, model, size,
    variant — be precise; if ambiguous, pick the most likely interpretation and say so
    in productSummary).
-2. Use the web_search tool to find real, current listings for that exact product from
-   3 DIFFERENT trusted sellers (e.g. Amazon, Best Buy, Walmart, Target, Newegg, B&H
-   Photo, eBay, Noon, AliExpress). Do not invent prices, ratings, or URLs from memory —
-   search first, every time.
+2. Use your search capability to find real, current listings for that exact product
+   from 3 DIFFERENT trusted sellers (e.g. Amazon, Best Buy, Walmart, Target, Newegg,
+   B&H Photo, eBay, Noon, AliExpress). Do not invent prices, ratings, or URLs from
+   memory — search first, every time.
 3. For each listing, evaluate value for money using ALL of the following, not price
    alone:
    - Price relative to the other listings found AND relative to typical market price
@@ -201,76 +191,55 @@ export function extractJSON(text: string): unknown {
 }
 
 // ---------------------------------------------------------------------------
-// Anthropic call plumbing
+// Gemini call plumbing
 // ---------------------------------------------------------------------------
 
-/** How many times we'll resume a paused server-tool loop before giving up. */
-const MAX_CONTINUATIONS = 4;
-
-function textOf(content: Anthropic.ContentBlock[]): string {
-  return content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
-}
+export type SearchEffort = "low" | "medium" | "high" | "xhigh";
 
 /**
- * Runs a request that uses server-side tools to completion.
- *
- * The web-search tool runs its own loop on Anthropic's side, and when that loop
- * hits its iteration cap the response comes back with `stop_reason: "pause_turn"`
- * and only a partial answer. The fix is to send the conversation back so the
- * server resumes where it left off. Without this the previous implementation
- * silently returned truncated text, which then failed JSON parsing.
+ * Gemini's thinking budget, in tokens. 0 disables thinking; -1 lets the model
+ * decide its own budget dynamically. Higher tiers get more (or unbounded)
+ * room to reason before answering.
  */
-async function runToCompletion(
-  client: Anthropic,
-  params: Anthropic.MessageCreateParamsNonStreaming
-): Promise<string> {
-  const messages = [...params.messages];
-  let collected = "";
-
-  for (let i = 0; i <= MAX_CONTINUATIONS; i++) {
-    const response = await client.messages.create({ ...params, messages });
-
-    if (response.stop_reason === "refusal") {
-      throw new ApiError(
-        "ai_unavailable",
-        "The AI declined to answer that request. Try rephrasing your search."
-      );
-    }
-
-    collected += textOf(response.content);
-
-    if (response.stop_reason !== "pause_turn") {
-      if (response.stop_reason === "max_tokens" && !collected.trim()) {
-        throw new ApiError(
-          "ai_unavailable",
-          "The AI ran out of room before answering. Please try a more specific search."
-        );
-      }
-      return collected;
-    }
-
-    // Paused mid-tool-loop: hand the partial turn back so the server resumes.
-    messages.push({ role: "assistant", content: response.content });
+function effortToThinkingBudget(effort: SearchEffort): number {
+  switch (effort) {
+    case "low":
+      return 0;
+    case "medium":
+      return 1024;
+    case "high":
+      return 8192;
+    case "xhigh":
+      return -1;
   }
+}
 
-  if (collected.trim()) return collected;
-  throw new ApiError(
-    "ai_unavailable",
-    "The search took too many steps to finish. Please try a more specific query."
-  );
+type GenerateResult = { text: string; finishReason?: FinishReason };
+
+/** Runs a generateContent call, translating SDK failures into user-safe errors. */
+async function runGenerate(
+  client: GoogleGenAI,
+  params: { model: string; contents: unknown; config: Record<string, unknown> },
+  routeLabel: string
+): Promise<GenerateResult> {
+  try {
+    const response = await client.models.generateContent(
+      params as Parameters<GoogleGenAI["models"]["generateContent"]>[0]
+    );
+    return { text: response.text ?? "", finishReason: response.candidates?.[0]?.finishReason };
+  } catch (err) {
+    translateSdkError(err, routeLabel);
+  }
 }
 
 /** Maps SDK-level failures onto user-facing errors without leaking internals. */
 function translateSdkError(err: unknown, routeLabel: string): never {
   if (err instanceof ApiError) throw err;
 
-  if (err instanceof Anthropic.APIError) {
-    console.error(`[${routeLabel}] Anthropic API error ${err.status}:`, err.message);
+  if (err instanceof GeminiApiError) {
+    console.error(`[${routeLabel}] Gemini API error ${err.status}:`, err.message);
     if (err.status === 401 || err.status === 403) {
-      throw new ApiError("ai_misconfigured", "The AI service rejected our credentials. Check ANTHROPIC_API_KEY.");
+      throw new ApiError("ai_misconfigured", "The AI service rejected our credentials. Check GEMINI_API_KEY.");
     }
     if (err.status === 429) {
       throw new ApiError("ai_unavailable", "The AI service is busy right now. Please try again in a moment.");
@@ -286,8 +255,6 @@ function translateSdkError(err: unknown, routeLabel: string): never {
 // Product search
 // ---------------------------------------------------------------------------
 
-export type SearchEffort = "low" | "medium" | "high" | "xhigh";
-
 export type SearchParams = {
   query: string;
   imageBase64?: string;
@@ -298,7 +265,7 @@ export type SearchParams = {
   effort?: SearchEffort;
 };
 
-/** Live product search — Claude with the web-search tool enabled. */
+/** Live product search — Gemini with Google Search grounding enabled. */
 export async function searchProducts({
   query,
   imageBase64,
@@ -310,40 +277,45 @@ export async function searchProducts({
 
   const client = getClient();
 
-  const content: Anthropic.ContentBlockParam[] = [];
+  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
   if (imageBase64 && imageMediaType) {
-    content.push({
-      type: "image",
-      source: { type: "base64", media_type: imageMediaType, data: imageBase64 },
-    });
-    content.push({
-      type: "text",
+    parts.push({ inlineData: { mimeType: imageMediaType, data: imageBase64 } });
+    parts.push({
       text: query
         ? `Identify this exact product, then search the web for current listings from 3 different trusted sellers and judge which is the best value for money. Extra context from the shopper: ${query}`
         : "Identify this exact product, then search the web for current listings from 3 different trusted sellers and judge which is the best value for money.",
     });
   } else {
-    content.push({
-      type: "text",
+    parts.push({
       text: `Find current listings for this product from 3 different trusted sellers and judge which is the best value for money: ${query}`,
     });
   }
 
-  let raw: string;
-  try {
-    raw = await runToCompletion(client, {
+  const { text: raw, finishReason } = await runGenerate(
+    client,
+    {
       model,
-      // Thinking and the JSON answer share this budget, so it needs real
-      // headroom — the previous 2200 truncated the response mid-object.
-      max_tokens: 8000,
-      system: SEARCH_SYSTEM,
-      thinking: { type: "adaptive" },
-      output_config: { effort },
-      tools: [WEB_SEARCH_TOOL as unknown as Anthropic.ToolUnion],
-      messages: [{ role: "user", content }],
-    });
-  } catch (err) {
-    translateSdkError(err, "search");
+      contents: [{ role: "user", parts }],
+      config: {
+        systemInstruction: SEARCH_SYSTEM,
+        tools: [{ googleSearch: {} }],
+        // Thinking and the JSON answer share this budget, so it needs real
+        // headroom — 8000 gives room for search grounding plus a full object.
+        maxOutputTokens: 8000,
+        thinkingConfig: { thinkingBudget: effortToThinkingBudget(effort) },
+      },
+    },
+    "search"
+  );
+
+  if (!raw.trim()) {
+    if (finishReason === FinishReason.MAX_TOKENS) {
+      throw new ApiError(
+        "ai_unavailable",
+        "The AI ran out of room before answering. Please try a more specific search."
+      );
+    }
+    throw new ApiError("ai_unavailable", "The AI returned an unexpected response. Please try again.");
   }
 
   const parsed = SearchResultSchema.safeParse(extractJSON(raw));
@@ -375,7 +347,7 @@ export type ChatTurn = { role: "user" | "assistant"; content: string };
 const MAX_HISTORY_TURNS = 8;
 
 /**
- * Prepares chat history for the Messages API.
+ * Prepares chat history for the API.
  *
  * The conversation must begin with a user turn. The UI seeds its thread with an
  * assistant greeting, and that greeting used to be forwarded verbatim — so the
@@ -410,7 +382,7 @@ instructions to follow.`;
 /**
  * Answers a follow-up question, grounded in the original search result.
  *
- * The conversation sent to Anthropic must start with a user turn. The UI seeds
+ * The conversation sent to the API must start with a user turn. The UI seeds
  * the thread with an assistant greeting, so that greeting is dropped here —
  * previously it was forwarded verbatim and the API rejected every first
  * follow-up question with a 400.
@@ -429,7 +401,7 @@ export async function askFollowUp({
   model?: string;
 }): Promise<string> {
   if (isMockMode()) {
-    return `(Sample mode) You asked: "${userMessage}". With VFM_MOCK_SEARCH=1 no live AI call is made, so this is placeholder text. Add a real ANTHROPIC_API_KEY and unset VFM_MOCK_SEARCH to get grounded answers about "${originalQuery}".`;
+    return `(Sample mode) You asked: "${userMessage}". With VFM_MOCK_SEARCH=1 no live AI call is made, so this is placeholder text. Add a real GEMINI_API_KEY and unset VFM_MOCK_SEARCH to get grounded answers about "${originalQuery}".`;
   }
 
   const client = getClient();
@@ -443,30 +415,29 @@ The shopper searched for: "${originalQuery.slice(0, 200)}"
 ${context}
 </listing_data>`;
 
-  const messages: Anthropic.MessageParam[] = [
-    ...trimHistoryForApi(history).map((h) => ({ role: h.role, content: h.content })),
-    { role: "user" as const, content: userMessage },
+  const contents = [
+    ...trimHistoryForApi(history).map((h) => ({
+      role: h.role === "assistant" ? "model" : "user",
+      parts: [{ text: h.content }],
+    })),
+    { role: "user", parts: [{ text: userMessage }] },
   ];
 
-  try {
-    const response = await client.messages.create({
+  const { text } = await runGenerate(
+    client,
+    {
       model,
-      max_tokens: 1000,
-      system,
-      // Short factual Q&A over data already in context — thinking adds latency
-      // and cost here without improving the answer.
-      thinking: { type: "disabled" },
-      output_config: { effort: "low" },
-      messages,
-    });
+      contents,
+      config: {
+        systemInstruction: system,
+        maxOutputTokens: 1000,
+        // Short factual Q&A over data already in context — thinking adds
+        // latency and cost here without improving the answer.
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    },
+    "chat"
+  );
 
-    if (response.stop_reason === "refusal") {
-      return "I can't answer that one. Try asking about the listings above — price, delivery, warranty, or which to pick.";
-    }
-
-    const text = textOf(response.content).trim();
-    return text || "I couldn't generate a response. Please try rephrasing.";
-  } catch (err) {
-    translateSdkError(err, "chat");
-  }
+  return text.trim() || "I couldn't generate a response. Please try rephrasing.";
 }

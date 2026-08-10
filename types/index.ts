@@ -3,7 +3,7 @@
  *
  * These are declared by hand rather than inferred from the zod schemas in
  * `lib/ai.ts` on purpose: client components import this file, and importing
- * `lib/ai.ts` would pull the Anthropic SDK into the browser bundle. Keep this
+ * `lib/ai.ts` would pull the Gemini SDK into the browser bundle. Keep this
  * file in step with `SearchResultSchema` when either changes.
  */
 

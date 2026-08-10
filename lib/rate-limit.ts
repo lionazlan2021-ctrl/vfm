@@ -2,7 +2,7 @@
  * Fixed-window rate limiter, held in process memory.
  *
  * This exists because /api/search and /api/chat each cost real money per call.
- * Without it, one unauthenticated visitor with a loop can run up a Gemini
+ * Without it, one unauthenticated visitor with a loop can run up an Anthropic
  * bill in minutes.
  *
  * Scope and limits:
@@ -81,7 +81,7 @@ export function rateLimitHeaders(r: RateLimitResult): Record<string, string> {
 
 /** Limits, in one place so they are easy to find and tune. */
 export const LIMITS = {
-  /** Gemini search calls. Deliberately tight — this is the expensive one. */
+  /** Anthropic web-search calls. Deliberately tight — this is the expensive one. */
   searchAnon: { limit: 5, windowSeconds: 60 * 60 },
   searchUser: { limit: 30, windowSeconds: 60 * 60 },
   /** Follow-up chat. Cheaper per call than search, but still a paid API call. */

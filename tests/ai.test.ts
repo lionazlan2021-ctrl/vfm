@@ -7,7 +7,7 @@ import { ApiError } from "../lib/errors";
 describe("trimHistoryForApi", () => {
   // The bug this guards: the chat UI seeds the thread with an assistant
   // greeting. Forwarding it made the API conversation start with an assistant
-  // turn, which the API rejects — so every first follow-up question 400'd.
+  // turn, which Anthropic rejects — so every first follow-up question 400'd.
   test("drops the seeded assistant greeting so the first turn is a user turn", () => {
     const out = trimHistoryForApi([
       { role: "assistant", content: "I found pricing for X…" },

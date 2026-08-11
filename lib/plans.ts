@@ -5,9 +5,9 @@
  * reasoning effort it spends, and how many searches are included each month.
  *
  * Every search is a paid Anthropic call with live web search, so the quota is
- * the real cost control — the model and effort settings mostly change answer
- * quality. Note Opus 4.8 and Opus 5 cost the same per token, so the gap between
- * Pro and Premium is deliberately quota + effort, not just the model name.
+ * the real cost control. Free runs on Haiku to keep token usage minimal; Pro
+ * and Premium both run on Sonnet 5, differentiated by effort and quota rather
+ * than a different (more expensive) model.
  *
  * Billing is not wired up. `plan` is a field on the User row that an admin (or
  * a future Stripe webhook) can set; nothing here collects money.
@@ -39,8 +39,8 @@ export const PLANS: Record<PlanId, Plan> = {
     name: "Free",
     price: 0,
     tagline: "Enough to settle a purchase you're on the fence about.",
-    model: "claude-sonnet-5",
-    searchEffort: "medium",
+    model: "claude-haiku-4-5-20251001",
+    searchEffort: "low",
     searchesPerMonth: 15,
     chatPerHour: 20,
     features: [
@@ -56,8 +56,8 @@ export const PLANS: Record<PlanId, Plan> = {
     name: "Pro",
     price: 12,
     tagline: "For people who research before every purchase.",
-    model: "claude-opus-4-8",
-    searchEffort: "high",
+    model: "claude-sonnet-5",
+    searchEffort: "medium",
     searchesPerMonth: 200,
     chatPerHour: 60,
     features: [
@@ -73,13 +73,13 @@ export const PLANS: Record<PlanId, Plan> = {
     name: "Premium",
     price: 29,
     tagline: "For high-value buys where being wrong is expensive.",
-    model: "claude-opus-5",
-    searchEffort: "xhigh",
+    model: "claude-sonnet-5",
+    searchEffort: "high",
     searchesPerMonth: 1000,
     chatPerHour: 200,
     features: [
       "1,000 product searches a month",
-      "Our most capable model, at maximum reasoning effort",
+      "Maximum reasoning effort on every search",
       "Best results on complex or high-ticket comparisons",
       "Priority handling when demand is high",
       "Everything in Pro",

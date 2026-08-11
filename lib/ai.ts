@@ -16,8 +16,26 @@ const MODEL = process.env.VFM_MODEL || "claude-sonnet-5";
  * Anthropic's live web-search tool. The `_20260209` variant adds dynamic
  * filtering: results are filtered before they reach the context window, which
  * makes searches both more accurate and cheaper.
+ *
+ * `allowed_callers: ["direct"]` is required on Haiku models (they don't support
+ * programmatic/agentic tool calling) and is a no-op on Sonnet/Opus, so it's set
+ * unconditionally rather than per-model.
  */
-const WEB_SEARCH_TOOL = { type: "web_search_20260209", name: "web_search" } as const;
+const WEB_SEARCH_TOOL = {
+  type: "web_search_20260209",
+  name: "web_search",
+  allowed_callers: ["direct"],
+} as const;
+
+/**
+ * Haiku models reject `thinking: { type: "adaptive" }` and the `output_config`
+ * block outright (400 errors), unlike Sonnet/Opus. Effort is meaningless on a
+ * model that can't spend a token budget on it, so it's just dropped for Haiku
+ * rather than translated to something else.
+ */
+function isHaikuModel(model: string): boolean {
+  return model.includes("haiku");
+}
 
 /** Media types Anthropic's vision API accepts. Anything else is rejected up front. */
 export const SUPPORTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
@@ -337,8 +355,9 @@ export async function searchProducts({
       // headroom — the previous 2200 truncated the response mid-object.
       max_tokens: 8000,
       system: SEARCH_SYSTEM,
-      thinking: { type: "adaptive" },
-      output_config: { effort },
+      ...(isHaikuModel(model)
+        ? { thinking: { type: "disabled" } }
+        : { thinking: { type: "adaptive" }, output_config: { effort } }),
       tools: [WEB_SEARCH_TOOL as unknown as Anthropic.ToolUnion],
       messages: [{ role: "user", content }],
     });
@@ -456,7 +475,7 @@ ${context}
       // Short factual Q&A over data already in context — thinking adds latency
       // and cost here without improving the answer.
       thinking: { type: "disabled" },
-      output_config: { effort: "low" },
+      ...(isHaikuModel(model) ? {} : { output_config: { effort: "low" } }),
       messages,
     });
 

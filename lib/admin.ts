@@ -5,10 +5,23 @@ import { ApiError } from "./errors";
 /**
  * Admin access control.
  *
- * The role is read from the database on every request, never from the session
- * cookie. A cookie is issued once and lives for 30 days; if the role were baked
- * into it, revoking an admin would not take effect until their session expired.
- * Reading the row costs one indexed lookup and makes revocation immediate.
+ * There are two ways to be an admin, and both are checked on every request
+ * rather than baked into the session cookie. A cookie lives for 30 days; if
+ * admin status were stored in it, revoking someone would not take effect until
+ * it expired. Re-checking costs one indexed lookup and makes revocation
+ * immediate.
+ *
+ *   1. `role = "admin"` on the user row — set from inside the admin panel, or
+ *      with `npm run role:set`.
+ *   2. The account's email is listed in the ADMIN_EMAILS environment variable.
+ *
+ * (2) exists because (1) has a bootstrap problem: granting the first admin
+ * requires database access, which whoever is deploying may not have to hand.
+ * ADMIN_EMAILS is set wherever the other secrets live (Vercel's environment
+ * variables), so the first admin can be granted without touching Postgres.
+ *
+ * It is not a back door: only someone who can already change the deployment's
+ * environment can edit it, and that person could deploy arbitrary code anyway.
  */
 
 export const ADMIN_ROLE = "admin";
@@ -20,6 +33,24 @@ export type AdminUser = {
   role: string;
 };
 
+/**
+ * Emails granted admin by configuration, lower-cased to match how addresses
+ * are stored. Comma-separated; blank or unset means nobody.
+ */
+export function configuredAdminEmails(): Set<string> {
+  return new Set(
+    (process.env.ADMIN_EMAILS || "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
+/** Whether this email is an admin by configuration alone. */
+export function isConfiguredAdminEmail(email: string): boolean {
+  return configuredAdminEmails().has(email.trim().toLowerCase());
+}
+
 /** The signed-in user, if they are an admin. Null in every other case. */
 export async function getAdminUser(): Promise<AdminUser | null> {
   const session = await getCurrentSession();
@@ -29,10 +60,14 @@ export async function getAdminUser(): Promise<AdminUser | null> {
     where: { id: session.userId },
     select: { id: true, email: true, name: true, role: true },
   });
+  if (!user) return null;
 
-  // Anything other than exactly "admin" is a normal user, so an unexpected
+  // Anything other than exactly "admin" fails this check, so an unexpected
   // value in the column can only ever deny access, never grant it.
-  if (!user || user.role !== ADMIN_ROLE) return null;
+  const byRole = user.role === ADMIN_ROLE;
+  const byConfig = isConfiguredAdminEmail(user.email);
+
+  if (!byRole && !byConfig) return null;
   return user;
 }
 

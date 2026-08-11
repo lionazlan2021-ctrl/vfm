@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { handle } from "@/lib/http";
-import { requireAdmin } from "@/lib/admin";
+import { requireAdmin, isConfiguredAdminEmail } from "@/lib/admin";
 import { currentPeriodStart } from "@/lib/plans";
 
 /**
@@ -83,6 +83,10 @@ export async function GET(req: NextRequest) {
         name: u.name,
         plan: u.plan,
         role: u.role,
+        // Admin via ADMIN_EMAILS rather than the role column. Surfaced so the
+        // table can say so and disable the role control — that dropdown cannot
+        // revoke this kind of admin, and shouldn't look like it can.
+        isConfiguredAdmin: isConfiguredAdminEmail(u.email),
         createdAt: u.createdAt.toISOString(),
         // The hash itself never leaves the server — only whether one exists,
         // which is what tells an admin how this person signs in.

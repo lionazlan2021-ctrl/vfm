@@ -10,6 +10,8 @@ type AdminUserRow = {
   name: string;
   plan: string;
   role: string;
+  /** Admin via the ADMIN_EMAILS env var; the role dropdown can't revoke it. */
+  isConfiguredAdmin: boolean;
   createdAt: string;
   hasPassword: boolean;
   hasGoogle: boolean;
@@ -202,23 +204,38 @@ export default function UsersTable({ currentAdminId }: { currentAdminId: string 
                       </Td>
 
                       <Td>
-                        <label className="sr-only" htmlFor={`role-${u.id}`}>
-                          Role for {u.email}
-                        </label>
-                        <select
-                          id={`role-${u.id}`}
-                          className="field"
-                          style={{ padding: "6px 10px", fontSize: "13px", width: "auto" }}
-                          value={u.role === "admin" ? "admin" : "user"}
-                          // Self-demotion is blocked on the server too; this
-                          // just avoids offering an action that will fail.
-                          disabled={busy || isSelf}
-                          title={isSelf ? "You can't change your own role." : undefined}
-                          onChange={(e) => void update(u.id, { role: e.target.value })}
-                        >
-                          <option value="user">User</option>
-                          <option value="admin">Admin</option>
-                        </select>
+                        {u.isConfiguredAdmin ? (
+                          // Their admin access comes from ADMIN_EMAILS, so this
+                          // dropdown couldn't take it away. Say where it comes
+                          // from instead of showing a control that does nothing.
+                          <span
+                            className="eyebrow"
+                            style={{ color: "var(--accent-deep)" }}
+                            title="Admin via the ADMIN_EMAILS environment variable. Remove them from it to revoke."
+                          >
+                            Admin (env)
+                          </span>
+                        ) : (
+                          <>
+                            <label className="sr-only" htmlFor={`role-${u.id}`}>
+                              Role for {u.email}
+                            </label>
+                            <select
+                              id={`role-${u.id}`}
+                              className="field"
+                              style={{ padding: "6px 10px", fontSize: "13px", width: "auto" }}
+                              value={u.role === "admin" ? "admin" : "user"}
+                              // Self-demotion is blocked on the server too; this
+                              // just avoids offering an action that will fail.
+                              disabled={busy || isSelf}
+                              title={isSelf ? "You can't change your own role." : undefined}
+                              onChange={(e) => void update(u.id, { role: e.target.value })}
+                            >
+                              <option value="user">User</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                          </>
+                        )}
                       </Td>
 
                       <Td align="right" mono muted>

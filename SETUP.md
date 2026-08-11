@@ -310,21 +310,37 @@ touching the terminal.
 button anywhere on the site, on purpose: if there were, anyone could press it.
 The first admin has to be made from your computer.
 
-### Making yourself an admin (do this once)
+### Making yourself an admin
 
-1. Sign up on the live site normally, with the email you want to use.
-2. On your computer, in the project folder, run:
+There are two ways. Use whichever suits you.
+
+**Option 1 — from Vercel, no database access needed (easiest)**
+
+Add an environment variable in Vercel (**Settings → Environment Variables**):
+
+| Name | Value |
+|---|---|
+| `ADMIN_EMAILS` | `you@email.com` |
+
+Redeploy. Any account with that email is an admin, immediately. You can list
+several, separated by commas. Removing an address here revokes their access on
+their very next click.
+
+**Option 2 — from your computer**
 
 ```bash
 npm run role:set -- your@email.com admin
 ```
 
-3. Reload the site. An **Admin** link now appears at the bottom of the sidebar.
+This writes to the database directly, so it needs your `DATABASE_URL` working
+locally. To undo: `npm run role:set -- their@email.com user`.
 
-That's it. From then on you can promote anyone else from inside `/admin` —
-you never need this command again unless you lose access.
+**Either way**, sign up on the live site first with that email — you're granting
+admin to an account, so the account has to exist. Then reload; an **Admin** link
+appears at the bottom of the sidebar.
 
-To remove someone's admin access: `npm run role:set -- their@email.com user`.
+From then on you can promote anyone else from inside `/admin` without touching
+either of these again.
 
 ### Things worth knowing
 
@@ -334,6 +350,11 @@ To remove someone's admin access: `npm run role:set -- their@email.com user`.
 - **You can't remove your own admin access** from the panel. If you were the
   only admin, that would lock everyone out permanently. Use the command above
   from another account if you really mean it.
+- **Admins granted by `ADMIN_EMAILS` show as "Admin (env)"** in the users table,
+  with no role dropdown. That's deliberate: the dropdown writes to the database,
+  and it can't override an environment variable — showing an editable control
+  that silently does nothing would be worse than showing none. Revoke them by
+  editing `ADMIN_EMAILS`.
 - **Changes apply immediately.** Plan and role are re-checked on every request,
   so nobody needs to log out and back in.
 

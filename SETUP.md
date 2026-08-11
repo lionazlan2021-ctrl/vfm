@@ -300,6 +300,108 @@ above keeps working.
 
 ---
 
+## The admin panel
+
+There's an admin area at `/admin`. It shows how many accounts and searches you
+have, and lets you change anyone's plan or make someone else an admin — without
+touching the terminal.
+
+**Nobody is an admin by default**, including you. There is no "become an admin"
+button anywhere on the site, on purpose: if there were, anyone could press it.
+The first admin has to be made from your computer.
+
+### Making yourself an admin (do this once)
+
+1. Sign up on the live site normally, with the email you want to use.
+2. On your computer, in the project folder, run:
+
+```bash
+npm run role:set -- your@email.com admin
+```
+
+3. Reload the site. An **Admin** link now appears at the bottom of the sidebar.
+
+That's it. From then on you can promote anyone else from inside `/admin` —
+you never need this command again unless you lose access.
+
+To remove someone's admin access: `npm run role:set -- their@email.com user`.
+
+### Things worth knowing
+
+- **Non-admins don't see a locked door.** Visiting `/admin` without permission
+  shows the normal 404 page, not "access denied". Someone poking around
+  shouldn't be told there's an admin panel to break into.
+- **You can't remove your own admin access** from the panel. If you were the
+  only admin, that would lock everyone out permanently. Use the command above
+  from another account if you really mean it.
+- **Changes apply immediately.** Plan and role are re-checked on every request,
+  so nobody needs to log out and back in.
+
+---
+
+## Google sign-in
+
+Optional. Leave it off and email/password login works exactly as before — the
+"Continue with Google" button simply doesn't appear.
+
+To switch it on you need two values from Google. This is the only part I can't
+do for you, because it needs your Google account.
+
+### 1. Create the credentials
+
+1. Go to **https://console.cloud.google.com/apis/credentials**
+2. Pick (or create) a project from the dropdown at the top
+3. If it asks you to configure a **consent screen** first:
+   - User type: **External**
+   - Fill in app name, your email, and save. You can leave it in "Testing"
+     mode while only you are using it — but note that in Testing mode **only
+     accounts you add as test users can sign in**. Click **Publish app** when
+     you want it open to everyone.
+4. Click **Create credentials → OAuth client ID**
+5. Application type: **Web application**
+6. Under **Authorised redirect URIs**, click *Add URI* and add each of these —
+   they must match exactly, including `https` and no trailing slash:
+
+```
+https://vfmco.com/api/auth/google/callback
+https://www.vfmco.com/api/auth/google/callback
+http://localhost:3000/api/auth/google/callback
+```
+
+7. Click **Create**. Google shows you a **Client ID** and a **Client secret**.
+   Copy both.
+
+### 2. Add them to the site
+
+In Vercel: **Settings → Environment Variables**, add two variables for
+Production and Preview, then redeploy:
+
+| Name | Value |
+|---|---|
+| `GOOGLE_CLIENT_ID` | the client ID you copied |
+| `GOOGLE_CLIENT_SECRET` | the client secret you copied |
+
+For local development, put the same two in your `.env`.
+
+The button appears on its own once both are set — nothing else to change.
+
+### If it doesn't work
+
+- **"Error 400: redirect_uri_mismatch"** — the URI in Google's console doesn't
+  exactly match where the site is running. Check for a missing `www`, a
+  trailing slash, or `http` vs `https`.
+- **"This app is blocked" / only you can sign in** — the consent screen is in
+  Testing mode. Publish it, or add the person as a test user.
+- **The button never appears** — the server can't see the two variables. In
+  Vercel, confirm they're set for the right environment and redeploy; env var
+  changes don't apply to an already-built deployment.
+
+Signing in with Google on an email that already has a password account **links
+the two** rather than making a second account, so nobody ends up with a split
+history. The existing password keeps working.
+
+---
+
 ## Working on the site without spending money
 
 Every AI search costs a small amount on your Anthropic account. While you're

@@ -12,7 +12,8 @@ sticker price.
 - **Value-for-money scoring** — the model must justify each 1–10 score with the specific tradeoff it weighed, and the listing it recommends is often *not* the cheapest one.
 - **Image upload** — real product identification via Claude's vision capability.
 - **Follow-up chat** — grounded in the listing data from the original search; says when something is outside that data instead of guessing.
-- **Authentication** — email/password signup and login with hashed passwords (bcrypt) and signed session cookies (JWT via `jose`).
+- **Authentication** — email/password signup and login with hashed passwords (bcrypt) and signed session cookies (JWT via `jose`), plus optional **Google sign-in** (`lib/google-oauth.ts`) implemented directly against Google's OAuth 2.0 endpoints so there's only one session system.
+- **Admin panel** — `/admin`, guarded by a database-backed role. Account and search stats, plus inline plan/role editing (`lib/admin.ts`).
 - **Database** — Prisma schema for users, search history, saved products, and price tracking.
 - **Search history** — past results are stored and **replayed from the database**, so reopening one costs nothing.
 - **Rate limiting** — the paid endpoints are metered per user and per IP (`lib/rate-limit.ts`).
@@ -26,6 +27,8 @@ sticker price.
 | Login/signup sessions | A real `AUTH_SECRET` in `.env` |
 | Saved products / history persistence | A real Postgres `DATABASE_URL` — required locally too, no SQLite fallback |
 | Live deployment | A Vercel (or similar) account |
+| Google sign-in (optional) | `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` — the button hides itself when unset |
+| Admin panel | One `npm run role:set -- you@email.com admin` to create the first admin |
 
 See **SETUP.md** for the full step-by-step guide, including how to get each of these.
 
@@ -88,18 +91,32 @@ chat — so you can develop and demo the whole flow offline. Set it back to `0`
 ## Plans
 
 Three tiers, defined in one place (`lib/plans.ts`). A plan controls which model
-runs the search, how much reasoning effort it spends, and the monthly allowance:
+runs the search, how hard it works, and the monthly allowance:
 
 | | Free | Pro | Premium |
 |---|---|---|---|
 | Price | $0 | $12/mo | $29/mo |
 | Searches | 15/month | 200/month | 1,000/month |
-| Model | `claude-sonnet-5` | `claude-opus-4-8` | `claude-opus-5` |
-| Reasoning effort | medium | high | xhigh |
+| Model | `claude-haiku-4-5` | `claude-sonnet-5` | `claude-sonnet-5` |
+| Reasoning effort | low | low | medium |
+| Web searches per request | 3 | 5 | 8 |
 | Follow-up chat | 20/hour | 60/hour | 200/hour |
 
-Opus 4.8 and Opus 5 cost the same per token, so the gap between Pro and Premium
-is deliberately quota and effort, not just the model name.
+**`maxSearches` is the setting that actually matters for cost and speed.** Left
+uncapped the model runs six or more sequential web searches, and every result
+set is re-sent as input on the following turn — measured at 55k input tokens and
+~48s. Capped at three it's 31k and ~11s. Reasoning effort barely moves either
+number (225 thinking tokens in that same request), so treat effort as a quality
+dial and `maxSearches` as the cost dial.
+
+Don't set `maxSearches` below 3: the product promises three listings from three
+different sellers, and a lower cap makes that quietly unsatisfiable rather than
+failing loudly. A test enforces this.
+
+**Haiku needs different request parameters.** It rejects `thinking: adaptive`
+and the `output_config` block outright, and it can't use the web-search tool
+without `allowed_callers: ["direct"]`. `lib/ai.ts` branches on the model name to
+handle this — worth knowing before you swap models around.
 
 **Billing is not connected.** The `plan` column on `User` is real and enforced,
 but nothing collects payment — the pricing page says so rather than showing a

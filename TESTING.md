@@ -18,7 +18,8 @@ no API key needed — these are pure-function tests and finish in about a second
 |---|---|
 | `tests/ai.test.ts` | Chat history trimming, JSON extraction from model output, the response schema, image-type validation, and the mock fixture |
 | `tests/rate-limit.test.ts` | Limit enforcement, per-key isolation, window reset, caller identification, response headers |
-| `tests/plans.test.ts` | Plan lookup and fallback, ladder invariants (price/quota/effort all increase), quota period boundaries |
+| `tests/plans.test.ts` | Plan lookup and fallback, ladder invariants (price/quota/effort/search-cap all increase), the floor of 3 web searches, quota period boundaries |
+| `tests/admin.test.ts` | That exactly one string grants admin (no near-miss value does), and that denial reports 404 rather than 403 |
 
 Three of these guard bugs that were live in the first build, so they are worth
 keeping rather than deleting if they ever start failing:
@@ -121,26 +122,56 @@ npm run db:setup && npm run dev
 - [ ] Set an invalid plan value directly in the database — the app treats it as Free rather than erroring
 - [ ] Logged out, `/pricing` still renders with no plan marked as current
 
-### 11. Mobile (375px wide)
+### 11. Google sign-in (only if `GOOGLE_CLIENT_ID`/`SECRET` are set)
+- [ ] With both unset, the "Continue with Google" button does **not** render and
+      email/password login still works
+- [ ] With both set, the button appears and opens Google's account chooser
+- [ ] Signing in creates an account and lands you back logged in
+- [ ] Press **Cancel** on Google's screen — you return with a readable
+      "sign-in was cancelled" toast, not a stack trace
+- [ ] Sign up with email/password, log out, then sign in with Google using the
+      **same address** — you get the *same* account (check the sidebar shows
+      your original history), not a duplicate
+- [ ] After linking, the original password still works
+- [ ] Visit `/api/auth/google/callback?code=x&state=y` directly — you're
+      redirected back with `invalid_state`, not signed in
+
+### 12. Admin panel
+- [ ] Logged out, `/admin` shows the **404 page** — not a login prompt, not
+      "forbidden" (it must not confirm the panel exists)
+- [ ] Logged in as a normal user, `/admin` still shows 404
+- [ ] `curl` `/api/admin/users` while logged out → `{"code":"not_found"}`, 404
+- [ ] Promote yourself: `npm run role:set -- you@email.com admin`
+- [ ] Reload — an **Admin** link appears in the sidebar, and `/admin` now loads
+      **without logging out and back in**
+- [ ] Overview shows account and search counts that match reality
+- [ ] Users page lists accounts; the search box filters by name and email
+- [ ] Change someone's plan in the table — their sidebar quota reflects the new
+      limit on their next page load
+- [ ] Your **own** role dropdown is disabled (you can't demote yourself)
+- [ ] Demote yourself from another admin account — `/admin` immediately returns
+      to 404 for you, without waiting for the session cookie to expire
+
+### 13. Mobile (375px wide)
 - [ ] Sidebar is hidden; a menu button appears in the top bar
 - [ ] It opens the drawer over a dimmed background; the close button and the backdrop both dismiss it
 - [ ] Both buttons are comfortably tappable — no precise aiming required
 - [ ] The page never scrolls sideways
 - [ ] Cards stack full width and text does not overflow
 
-### 12. Keyboard and screen reader
+### 14. Keyboard and screen reader
 - [ ] Tab through the page — focus is always visible
 - [ ] Every control reachable and operable by keyboard alone
 - [ ] Save/track buttons announce their state ("Remove … from saved" vs "Save … listing")
 - [ ] With "reduce motion" enabled in the OS, sections appear at once with no fade and the verdict shows in full
 
-### 13. Error handling
+### 15. Error handling
 - [ ] Stop the dev server mid-search — a readable error, no stack trace on screen
 - [ ] Set `ANTHROPIC_API_KEY` to a bogus value and unset `VFM_MOCK_SEARCH` — a clear
       "AI service isn't configured" message rather than a 500
 - [ ] Visit `/nonexistent-page` — the styled 404 renders
 
-### 14. Production build
+### 16. Production build
 - [ ] `npm run build` succeeds with no errors or lint failures
 - [ ] `npm start` serves the app and search still works
 

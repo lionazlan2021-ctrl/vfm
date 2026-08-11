@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { handle } from "@/lib/http";
 import { getUsage } from "@/lib/usage";
 import { isGoogleConfigured } from "@/lib/google-oauth";
-import { ADMIN_ROLE } from "@/lib/admin";
+import { isAdminIdentity } from "@/lib/admin";
 
 /**
  * Current session, plus the caller's plan and this month's search usage.
@@ -42,7 +42,9 @@ export async function GET() {
         name: user.name,
         plan: usage.plan.id,
         image: user.image,
-        isAdmin: user.role === ADMIN_ROLE,
+        // The same predicate the route guard uses, so the sidebar link and
+        // actual access can't disagree.
+        isAdmin: isAdminIdentity(user),
       },
       usage: {
         used: usage.used,

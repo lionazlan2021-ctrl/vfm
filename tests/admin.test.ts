@@ -1,6 +1,11 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ADMIN_ROLE, configuredAdminEmails, isConfiguredAdminEmail } from "../lib/admin";
+import {
+  ADMIN_ROLE,
+  configuredAdminEmails,
+  isConfiguredAdminEmail,
+  isAdminIdentity,
+} from "../lib/admin";
 import { STATUS_BY_CODE } from "../lib/errors";
 
 /**
@@ -38,6 +43,41 @@ describe("admin role", () => {
   test("the denial code maps to 404, not 403 or 401", () => {
     assert.equal(STATUS_BY_CODE.not_found, 404);
     assert.notEqual(STATUS_BY_CODE.not_found, STATUS_BY_CODE.unauthorized);
+  });
+});
+
+// This guards a bug that shipped: /api/auth/me decided isAdmin from the role
+// column alone while the route guard checked both grants, so an ADMIN_EMAILS
+// admin could open /admin by typing the URL but never saw the link. Both now
+// call isAdminIdentity; these cases pin what it must accept.
+describe("isAdminIdentity", () => {
+  const withEnv = (value: string, fn: () => void) => {
+    const original = process.env.ADMIN_EMAILS;
+    process.env.ADMIN_EMAILS = value;
+    try {
+      fn();
+    } finally {
+      if (original === undefined) delete process.env.ADMIN_EMAILS;
+      else process.env.ADMIN_EMAILS = original;
+    }
+  };
+
+  test("grants on the role column alone", () => {
+    withEnv("", () => {
+      assert.ok(isAdminIdentity({ role: ADMIN_ROLE, email: "someone@example.com" }));
+    });
+  });
+
+  test("grants on ADMIN_EMAILS alone, with role still 'user'", () => {
+    withEnv("boot@example.com", () => {
+      assert.ok(isAdminIdentity({ role: "user", email: "boot@example.com" }));
+    });
+  });
+
+  test("denies when neither grant applies", () => {
+    withEnv("boot@example.com", () => {
+      assert.equal(isAdminIdentity({ role: "user", email: "other@example.com" }), false);
+    });
   });
 });
 

@@ -51,6 +51,18 @@ export function isConfiguredAdminEmail(email: string): boolean {
   return configuredAdminEmails().has(email.trim().toLowerCase());
 }
 
+/**
+ * The single admin predicate. Every place that decides "is this person an
+ * admin" must call this one function.
+ *
+ * It exists because the two call sites drifted: the route guard checked both
+ * grants while /api/auth/me checked only the role column, so an ADMIN_EMAILS
+ * admin could reach /admin by typing the URL but never saw the link to it.
+ */
+export function isAdminIdentity(user: { role: string; email: string }): boolean {
+  return user.role === ADMIN_ROLE || isConfiguredAdminEmail(user.email);
+}
+
 /** The signed-in user, if they are an admin. Null in every other case. */
 export async function getAdminUser(): Promise<AdminUser | null> {
   const session = await getCurrentSession();
@@ -62,12 +74,9 @@ export async function getAdminUser(): Promise<AdminUser | null> {
   });
   if (!user) return null;
 
-  // Anything other than exactly "admin" fails this check, so an unexpected
-  // value in the column can only ever deny access, never grant it.
-  const byRole = user.role === ADMIN_ROLE;
-  const byConfig = isConfiguredAdminEmail(user.email);
-
-  if (!byRole && !byConfig) return null;
+  // Anything other than exactly "admin" fails the role half of this check, so
+  // an unexpected value in the column can only ever deny access, never grant it.
+  if (!isAdminIdentity(user)) return null;
   return user;
 }
 

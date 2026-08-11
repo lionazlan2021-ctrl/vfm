@@ -25,6 +25,15 @@ export type Plan = {
   model: string;
   /** Reasoning effort for product search. Higher = better judgement, more tokens. */
   searchEffort: "low" | "medium" | "high" | "xhigh";
+  /**
+   * Hard cap on web_search round trips per request.
+   *
+   * This is the real latency and token lever, not effort. Left uncapped the
+   * model runs 6+ sequential searches, and each result set is re-sent as input
+   * on the next turn — measured 55k input tokens and ~48s uncapped, versus 31k
+   * and ~11s at a cap of 3. Three is enough to find three sellers.
+   */
+  maxSearches: number;
   /** Searches included per calendar month. */
   searchesPerMonth: number;
   /** Follow-up chat messages per hour. */
@@ -41,6 +50,7 @@ export const PLANS: Record<PlanId, Plan> = {
     tagline: "Enough to settle a purchase you're on the fence about.",
     model: "claude-haiku-4-5-20251001",
     searchEffort: "low",
+    maxSearches: 3,
     searchesPerMonth: 15,
     chatPerHour: 20,
     features: [
@@ -57,7 +67,8 @@ export const PLANS: Record<PlanId, Plan> = {
     price: 12,
     tagline: "For people who research before every purchase.",
     model: "claude-sonnet-5",
-    searchEffort: "medium",
+    searchEffort: "low",
+    maxSearches: 5,
     searchesPerMonth: 200,
     chatPerHour: 60,
     features: [
@@ -74,7 +85,8 @@ export const PLANS: Record<PlanId, Plan> = {
     price: 29,
     tagline: "For high-value buys where being wrong is expensive.",
     model: "claude-sonnet-5",
-    searchEffort: "high",
+    searchEffort: "medium",
+    maxSearches: 8,
     searchesPerMonth: 1000,
     chatPerHour: 200,
     features: [

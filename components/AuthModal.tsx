@@ -26,6 +26,11 @@ export default function AuthModal({
   const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+  /**
+   * Whether the server has Google credentials configured. Null until known, so
+   * the button doesn't flash in and out on first paint.
+   */
+  const [googleEnabled, setGoogleEnabled] = useState<boolean | null>(null);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
@@ -46,6 +51,24 @@ export default function AuthModal({
   useEffect(() => {
     openerRef.current = document.activeElement as HTMLElement | null;
     firstFieldRef.current?.focus();
+  }, []);
+
+  // Ask the server whether Google sign-in is available. Failing quietly to
+  // "unavailable" is right: password login still works, and an error banner
+  // about an optional button would be noise.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d: { googleEnabled?: boolean }) => {
+        if (!cancelled) setGoogleEnabled(Boolean(d.googleEnabled));
+      })
+      .catch(() => {
+        if (!cancelled) setGoogleEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -159,6 +182,34 @@ export default function AuthModal({
             </svg>
           </button>
         </div>
+
+        {googleEnabled && (
+          <>
+            <a
+              href="/api/auth/google"
+              className="btn-quiet w-full"
+              style={{ marginBottom: 6, textDecoration: "none" }}
+            >
+              {/* Google's mark, inlined — an external image would be blocked
+                  and would leak a request to Google before consent. */}
+              <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
+                <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.7-2 5-4.4 6.6v5.5h7.1c4.2-3.8 6.6-9.5 6.6-16.1z" />
+                <path fill="#34A853" d="M24 46c6 0 11-2 14.6-5.4l-7.1-5.5c-2 1.3-4.5 2.1-7.5 2.1-5.8 0-10.7-3.9-12.4-9.1H4.3v5.7C7.9 41 15.4 46 24 46z" />
+                <path fill="#FBBC05" d="M11.6 28.1c-.4-1.3-.7-2.7-.7-4.1s.2-2.8.7-4.1v-5.7H4.3C2.8 17.1 2 20.4 2 24s.8 6.9 2.3 9.8l7.3-5.7z" />
+                <path fill="#EA4335" d="M24 10.8c3.3 0 6.2 1.1 8.5 3.3l6.3-6.3C35 4.1 30 2 24 2 15.4 2 7.9 7 4.3 14.2l7.3 5.7c1.7-5.2 6.6-9.1 12.4-9.1z" />
+              </svg>
+              Continue with Google
+            </a>
+
+            <div className="flex items-center gap-3 my-4" aria-hidden="true">
+              <span style={{ flex: 1, height: 1, background: "var(--rule)" }} />
+              <span className="eyebrow" style={{ fontSize: 10 }}>
+                or
+              </span>
+              <span style={{ flex: 1, height: 1, background: "var(--rule)" }} />
+            </div>
+          </>
+        )}
 
         <form onSubmit={submit} noValidate className="space-y-3">
           {mode === "signup" && (

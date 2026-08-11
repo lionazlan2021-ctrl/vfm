@@ -61,6 +61,28 @@ describe("plan ladder", () => {
     }
   });
 
+  test("the search cap never decreases as you pay more", () => {
+    const ordered = PLAN_ORDER.map((id) => PLANS[id]);
+    for (let i = 1; i < ordered.length; i++) {
+      assert.ok(
+        ordered[i].maxSearches >= ordered[i - 1].maxSearches,
+        `${ordered[i].id} must not search less than ${ordered[i - 1].id}`
+      );
+    }
+  });
+
+  // The whole product is "three listings from three different sellers". A cap
+  // below three makes that impossible to satisfy, so this guards the one value
+  // that would quietly break every result rather than just slow it down.
+  test("every plan can run enough searches to find three sellers", () => {
+    for (const id of PLAN_ORDER) {
+      assert.ok(
+        PLANS[id].maxSearches >= 3,
+        `${id} caps searches at ${PLANS[id].maxSearches}, below the three sellers we promise`
+      );
+    }
+  });
+
   test("the free tier really is free", () => {
     assert.equal(PLANS.free.price, 0);
   });

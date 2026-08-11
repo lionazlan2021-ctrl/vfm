@@ -25,9 +25,16 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.findUnique({ where: { email } });
 
-    // The same message for "no such user" and "wrong password" so the response
-    // can't be used to discover which addresses have accounts.
-    const valid = user ? await verifyPassword(password, user.passwordHash) : false;
+    // The same message for "no such user", "wrong password", and "this account
+    // signs in with Google" so the response can't be used to discover which
+    // addresses have accounts, or how they authenticate.
+    //
+    // passwordHash is null for Google-created accounts. Guarding on it here
+    // matters: bcrypt.compare against a null hash resolves false rather than
+    // throwing, so without this the route would still answer correctly, but
+    // only by accident.
+    const valid =
+      user?.passwordHash != null ? await verifyPassword(password, user.passwordHash) : false;
     if (!user || !valid) {
       return apiError("unauthorized", "Incorrect email or password.");
     }

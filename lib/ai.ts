@@ -21,11 +21,17 @@ const MODEL = process.env.VFM_MODEL || "claude-sonnet-5";
  * programmatic/agentic tool calling) and is a no-op on Sonnet/Opus, so it's set
  * unconditionally rather than per-model.
  */
-const WEB_SEARCH_TOOL = {
-  type: "web_search_20260209",
-  name: "web_search",
-  allowed_callers: ["direct"],
-} as const;
+function webSearchTool(maxUses: number) {
+  return {
+    type: "web_search_20260209",
+    name: "web_search",
+    allowed_callers: ["direct"],
+    // Without this the model runs as many searches as it likes, and every
+    // result set is re-sent as input on the following turn — the dominant
+    // cost and latency driver, far more than reasoning effort.
+    max_uses: maxUses,
+  } as const;
+}
 
 /**
  * Haiku models reject `thinking: { type: "adaptive" }` and the `output_config`
@@ -314,6 +320,8 @@ export type SearchParams = {
   model?: string;
   /** Reasoning effort. Higher tiers think harder about the value judgement. */
   effort?: SearchEffort;
+  /** Cap on web_search round trips. Comes from the caller's plan. */
+  maxSearches?: number;
 };
 
 /** Live product search — Claude with the web-search tool enabled. */
@@ -323,6 +331,7 @@ export async function searchProducts({
   imageMediaType,
   model = MODEL,
   effort = "high",
+  maxSearches = 3,
 }: SearchParams): Promise<ParsedSearchResult> {
   if (isMockMode()) return mockSearch(query, Boolean(imageBase64));
 
@@ -358,7 +367,7 @@ export async function searchProducts({
       ...(isHaikuModel(model)
         ? { thinking: { type: "disabled" } }
         : { thinking: { type: "adaptive" }, output_config: { effort } }),
-      tools: [WEB_SEARCH_TOOL as unknown as Anthropic.ToolUnion],
+      tools: [webSearchTool(maxSearches) as unknown as Anthropic.ToolUnion],
       messages: [{ role: "user", content }],
     });
   } catch (err) {

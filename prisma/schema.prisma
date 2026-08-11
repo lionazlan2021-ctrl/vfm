@@ -14,17 +14,34 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
+  id    String @id @default(cuid())
   // Stored lower-cased by the signup route so addresses are case-insensitive.
-  email        String   @unique
-  passwordHash String
-  name         String
-  createdAt    DateTime @default(now())
+  email String @unique
+
+  /// Null for accounts created through Google — they have no password to
+  /// verify. The login route must treat null as "this account can't use
+  /// password login" rather than comparing against it.
+  passwordHash String?
+
+  name      String
+  createdAt DateTime @default(now())
+
+  /// Google's stable subject id ("sub"), set when an account signs in with
+  /// Google. Unique so one Google account maps to exactly one user. Null for
+  /// password-only accounts.
+  googleId String? @unique
+
+  /// Profile picture URL from Google, if provided. Display only.
+  image String?
 
   /// Subscription tier: "free" | "pro" | "premium". See lib/plans.ts.
   /// Billing is not wired up — this is set manually (or by a future Stripe
   /// webhook). Anything unrecognised is treated as "free".
   plan String @default("free")
+
+  /// "user" | "admin". Admins can reach /admin. Anything unrecognised is
+  /// treated as a normal user, so a typo can never grant access.
+  role String @default("user")
 
   searches Search[]
   saved    SavedProduct[]

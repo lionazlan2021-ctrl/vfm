@@ -82,6 +82,7 @@ export async function POST(req: NextRequest) {
       imageMediaType: body.imageMediaType as never,
       model: plan.model,
       effort: plan.searchEffort,
+      maxSearches: plan.maxSearches,
     });
 
     // Record the search for signed-in users. A history write must never sink an

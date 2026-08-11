@@ -250,6 +250,11 @@ export default function Sidebar({
                 {user.email}
               </span>
             </div>
+            {user.isAdmin && (
+              <Link href="/admin" className="nav-link">
+                Admin
+              </Link>
+            )}
             <button onClick={onLogout} className="nav-link">
               Log out
             </button>

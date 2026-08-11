@@ -59,8 +59,12 @@ export async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-/** Convenience for POST/DELETE with a JSON body. */
-export function apiSend<T>(url: string, method: "POST" | "DELETE" | "PUT", payload: unknown) {
+/** Convenience for a write request with a JSON body. */
+export function apiSend<T>(
+  url: string,
+  method: "POST" | "DELETE" | "PUT" | "PATCH",
+  payload: unknown
+) {
   return apiFetch<T>(url, { method, body: JSON.stringify(payload) });
 }
 

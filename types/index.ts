@@ -44,7 +44,17 @@ export type ChatMessage = { role: "user" | "assistant"; text: string };
 
 export type PlanId = "free" | "pro" | "premium";
 
-export type User = { id: string; email: string; name: string; plan: PlanId };
+export type User = {
+  id: string;
+  email: string;
+  name: string;
+  plan: PlanId;
+  /** Profile picture from Google, when the account signed in that way. */
+  image?: string | null;
+  /** Drives the admin link in the sidebar. The server checks this again on
+   *  every /admin request — this flag only controls what is shown. */
+  isAdmin?: boolean;
+};
 
 /** This month's search allowance, returned alongside the session. */
 export type Usage = {

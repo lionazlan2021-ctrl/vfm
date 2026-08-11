@@ -53,6 +53,28 @@ function VFMApp() {
     refreshSession().finally(() => setAuthChecked(true));
   }, [refreshSession]);
 
+  /**
+   * Google sign-in redirects back here with ?auth_error=<code> when it fails.
+   * Surface it as a toast and strip the parameter, so a reload or a shared link
+   * doesn't show a stale error.
+   */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("auth_error");
+    if (!code) return;
+
+    const messages: Record<string, string> = {
+      cancelled: "Google sign-in was cancelled.",
+      google_unavailable: "Google sign-in isn't set up on this site yet.",
+      email_unverified: "That Google account's email isn't verified.",
+      invalid_state: "That sign-in link expired. Please try again.",
+      google_failed: "Couldn't sign in with Google. Please try again.",
+    };
+    push(messages[code] ?? "Couldn't sign in. Please try again.", "error");
+
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [push]);
+
   const refreshHistory = useCallback(() => {
     apiFetch<{ history: HistoryEntry[] }>("/api/history")
       .then((d) => setHistory(d.history || []))

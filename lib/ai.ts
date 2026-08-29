@@ -90,84 +90,94 @@ const ListingSchema = z.object({
 });
 
 export const SearchResultSchema = z.object({
+  /**
+   * Which kind of answer this is. The same endpoint handles both, because a
+   * shopper typing "is it worth buying stock for my shop in bulk?" into the
+   * search box means it as a question, not a product to price up. Absent means
+   * listings, so older stored results keep parsing.
+   */
+  mode: z.enum(["listings", "advice"]).optional(),
   productSummary: z.string().optional(),
+  /** Prose answer, when mode is "advice". No web search, no listings. */
+  advice: z.string().optional(),
   listing1: ListingSchema.optional(),
   listing2: ListingSchema.optional(),
   listing3: ListingSchema.optional(),
+  // Only ever populated on Premium, which compares five sellers.
+  listing4: ListingSchema.optional(),
+  listing5: ListingSchema.optional(),
   verdict: z.string().optional(),
-  recommendation: z.number().int().min(1).max(3).optional(),
+  recommendation: z.number().int().min(1).max(5).optional(),
 });
 
 export type ParsedSearchResult = z.infer<typeof SearchResultSchema>;
+
+/** The listings present, in order, ignoring gaps. */
+export function listingsOf(result: ParsedSearchResult) {
+  return [result.listing1, result.listing2, result.listing3, result.listing4, result.listing5].filter(
+    Boolean
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Prompts
 // ---------------------------------------------------------------------------
 
-const SEARCH_SYSTEM = `You are VFM AI — Value For Money — a real-time shopping intelligence engine. Your job
-is not to find the cheapest listing. Your job is to find which listing is genuinely
-worth its price, for this specific product, right now.
+/**
+ * Built per request because the seller count is plan-dependent, and because
+ * every token here is paid for on every single search — this is deliberately
+ * terser than prose would be.
+ */
+function searchSystemPrompt(sellerCount: number): string {
+  return `You are VFM AI — Value For Money. You answer two kinds of message.
 
-PROCESS
-1. Identify the exact product from the user's query or image (brand, model, size,
-   variant — be precise; if ambiguous, pick the most likely interpretation and say so
-   in productSummary).
-2. Use the web_search tool to find real, current listings for that exact product from
-   3 DIFFERENT trusted sellers (e.g. Amazon, Best Buy, Walmart, Target, Newegg, B&H
-   Photo, eBay, Noon, AliExpress). Do not invent prices, ratings, or URLs from memory —
-   search first, every time.
-3. For each listing, evaluate value for money using ALL of the following, not price
-   alone:
-   - Price relative to the other listings found AND relative to typical market price
-     for this product (if a price looks unusually low, note the likely reason — used,
-     refurbished, third-party seller, etc. — rather than just rewarding it).
-   - Condition (new vs. refurbished vs. used) and whether the price reflects that.
-   - Seller/platform trustworthiness and return policy strength.
-   - Total cost including shipping, not just sticker price.
-   - Delivery time, if the user's context suggests urgency.
-   - Warranty length and coverage.
-4. valueScore (1-10) must reflect a genuine price-to-quality-and-trust judgment. A
-   cheaper but sketchy or slower listing should NOT automatically outscore a
-   moderately pricier one from a trusted seller with better terms. Justify the score
-   in aiReason with the specific tradeoff you weighed — not a generic compliment.
-5. recommendation must point to whichever listing has the best overall value, which is
-   not always listing1's price rank — it's whichever number actually deserves the
-   verdict.
+A) A PRODUCT to price up (a thing someone could buy). Compare sellers and judge
+which listing is genuinely worth its price — not which is cheapest.
+B) A QUESTION or request for advice — running a shop, pricing strategy, whether
+to buy at all, what to look for, sourcing, reselling, general buying guidance.
+Answer it directly. Do NOT search. Do NOT invent listings.
 
-OUTPUT — respond with ONLY a single valid JSON object, no markdown fences, no text
-before or after:
-{
-  "productSummary": "one-line description of the exact product identified",
-  "listing1": {
-    "store": "string",
-    "price": "$XXX.XX",
-    "originalPrice": "$XXX.XX or null",
-    "condition": "New | Refurbished | Used",
-    "shipping": "e.g. Free shipping / $X.XX",
-    "delivery": "e.g. 2-3 business days",
-    "warranty": "e.g. 1 year manufacturer",
-    "sellerRating": 4.8,
-    "valueScore": 9,
-    "buyUrl": "https://...",
-    "emoji": "single relevant emoji",
-    "pros": ["specific pro", "specific pro"],
-    "cons": ["specific con"],
-    "aiReason": "1-2 sentences naming the actual tradeoff behind the score"
-  },
-  "listing2": { "...same shape, different store" },
-  "listing3": { "...same shape, a third different store" },
-  "verdict": "2-3 sentences: which listing to buy and the specific reason, acknowledging any real tradeoff a shopper should know about",
-  "recommendation": 1
-}
+If it is B, reply ONLY with:
+{"mode":"advice","advice":"your answer, 2-5 short paragraphs, specific and practical"}
+
+Otherwise it is A. Then:
+1. Identify the exact product (brand, model, size, variant). If ambiguous, pick
+   the likeliest reading and say so in productSummary.
+2. Use web_search to find real, current listings from ${sellerCount} DIFFERENT trusted
+   sellers (Amazon, Best Buy, Walmart, Target, Newegg, B&H, eBay, Noon, AliExpress).
+   Never recall prices, ratings or URLs from memory — search first, every time.
+3. Judge each listing on ALL of: price vs the others AND vs typical market price
+   (an unusually low price needs its reason named — used, refurbished, grey-market,
+   third-party — not just rewarded); condition and whether the price reflects it;
+   seller trust and returns; total cost including shipping; delivery speed;
+   warranty.
+4. valueScore (1-10) is a price-to-trust judgement, not a price ranking. A cheaper
+   but slower or sketchier listing must NOT automatically outscore a pricier one
+   with better terms. aiReason must name the actual tradeoff you weighed.
+5. recommendation is whichever listing genuinely deserves the verdict — often not
+   the cheapest, and not necessarily listing1.
+
+Reply ONLY with one JSON object, no fences, no text around it:
+{"mode":"listings",
+ "productSummary":"one line naming the exact product",
+ "listing1":{"store":"","price":"$X.XX","originalPrice":"$X.XX or null",
+   "condition":"New|Refurbished|Used","shipping":"Free shipping or $X.XX",
+   "delivery":"e.g. 2-3 business days","warranty":"e.g. 1 year manufacturer",
+   "sellerRating":4.8,"valueScore":9,"buyUrl":"https://...","emoji":"one emoji",
+   "pros":["specific","specific"],"cons":["specific"],
+   "aiReason":"1-2 sentences naming the tradeoff behind the score"},
+${Array.from({ length: sellerCount - 1 }, (_, i) => ` "listing${i + 2}":{same shape, a different store},`).join("\n")}
+ "verdict":"2-3 sentences: which to buy and why, naming any real tradeoff",
+ "recommendation":1}
 
 RULES
-- All 3 listings must be different sellers/stores.
-- Never fabricate a specific price, rating, or URL if search results didn't actually
-  return one — say so honestly in aiReason instead of inventing precision.
-- If search results are thin or the product couldn't be confidently identified, say
-  so plainly rather than filling gaps with guesses.
-- sellerRating is on a 0-5 scale. Omit it entirely rather than guessing a number.
-- buyUrl must be a real URL you found via search. Omit it rather than inventing one.`;
+- All ${sellerCount} listings must be different sellers.
+- Never fabricate a price, rating or URL. If search didn't return one, say so in
+  aiReason and omit the field rather than inventing precision.
+- If results are thin or the product is unclear, say so plainly.
+- sellerRating is 0-5. Omit rather than guess.
+- buyUrl must be a real URL from search. Omit rather than invent.`;
+}
 
 // ---------------------------------------------------------------------------
 // JSON extraction
@@ -322,6 +332,10 @@ export type SearchParams = {
   effort?: SearchEffort;
   /** Cap on web_search round trips. Comes from the caller's plan. */
   maxSearches?: number;
+  /** How many different sellers to compare. Premium gets five. */
+  sellers?: number;
+  /** Ceiling on the response, sized to the seller count. */
+  maxTokens?: number;
 };
 
 /** Live product search — Claude with the web-search tool enabled. */
@@ -332,6 +346,8 @@ export async function searchProducts({
   model = MODEL,
   effort = "high",
   maxSearches = 3,
+  sellers = 3,
+  maxTokens = 3500,
 }: SearchParams): Promise<ParsedSearchResult> {
   if (isMockMode()) return mockSearch(query, Boolean(imageBase64));
 
@@ -346,24 +362,24 @@ export async function searchProducts({
     content.push({
       type: "text",
       text: query
-        ? `Identify this exact product, then search the web for current listings from 3 different trusted sellers and judge which is the best value for money. Extra context from the shopper: ${query}`
-        : "Identify this exact product, then search the web for current listings from 3 different trusted sellers and judge which is the best value for money.",
+        ? `Identify this exact product, then compare ${sellers} sellers. Shopper's note: ${query}`
+        : `Identify this exact product, then compare ${sellers} sellers.`,
     });
   } else {
-    content.push({
-      type: "text",
-      text: `Find current listings for this product from 3 different trusted sellers and judge which is the best value for money: ${query}`,
-    });
+    // Deliberately not "find listings for this product" — that would push a
+    // genuine question ("should I buy in bulk for my shop?") down the product
+    // path. The system prompt decides which of the two it is.
+    content.push({ type: "text", text: query });
   }
 
   let raw: string;
   try {
     raw = await runToCompletion(client, {
       model,
-      // Thinking and the JSON answer share this budget, so it needs real
-      // headroom — the previous 2200 truncated the response mid-object.
-      max_tokens: 8000,
-      system: SEARCH_SYSTEM,
+      // Thinking and the JSON answer share this budget. Sized to the seller
+      // count rather than a flat 8000 we pay for on every request.
+      max_tokens: maxTokens,
+      system: searchSystemPrompt(sellers),
       ...(isHaikuModel(model)
         ? { thinking: { type: "disabled" } }
         : { thinking: { type: "adaptive" }, output_config: { effort } }),
@@ -384,7 +400,17 @@ export async function searchProducts({
   }
 
   const result = parsed.data;
-  if (!result.listing1 && !result.listing2 && !result.listing3) {
+
+  // An advice answer is complete without listings — only demand listings when
+  // the model actually took the product path.
+  if (result.mode === "advice") {
+    if (!result.advice?.trim()) {
+      throw new ApiError("ai_unavailable", "The AI returned an empty answer. Please try again.");
+    }
+    return result;
+  }
+
+  if (listingsOf(result).length === 0) {
     throw new ApiError(
       "ai_unavailable",
       "No listings were found for that product. Try a more specific product name."

@@ -83,6 +83,8 @@ export async function POST(req: NextRequest) {
       model: plan.model,
       effort: plan.searchEffort,
       maxSearches: plan.maxSearches,
+      sellers: plan.sellersCompared,
+      maxTokens: plan.maxTokens,
     });
 
     // Record the search for signed-in users. A history write must never sink an

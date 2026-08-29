@@ -1,6 +1,12 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { extractJSON, trimHistoryForApi, SearchResultSchema, isSupportedImageType } from "../lib/ai";
+import {
+  extractJSON,
+  trimHistoryForApi,
+  SearchResultSchema,
+  isSupportedImageType,
+  listingsOf,
+} from "../lib/ai";
 import { mockSearch } from "../lib/mock-search";
 import { ApiError } from "../lib/errors";
 
@@ -117,6 +123,62 @@ describe("SearchResultSchema", () => {
   test("allows a listing with no buyUrl (the AI is told to omit it, not invent one)", () => {
     const r = SearchResultSchema.safeParse({ listing1: { store: "A", price: "$1" } });
     assert.ok(r.success);
+  });
+
+  test("accepts five listings, which only Premium produces", () => {
+    const listing = { store: "A", price: "$1" };
+    const r = SearchResultSchema.safeParse({
+      mode: "listings",
+      listing1: listing,
+      listing2: { ...listing, store: "B" },
+      listing3: { ...listing, store: "C" },
+      listing4: { ...listing, store: "D" },
+      listing5: { ...listing, store: "E" },
+      recommendation: 5,
+    });
+    assert.ok(r.success, JSON.stringify(r.error?.issues));
+  });
+
+  // recommendation is a 1-based index into the listings. Allowing 6 when at most
+  // five exist would point the "best value" badge at nothing.
+  test("rejects a recommendation beyond the fifth listing", () => {
+    assert.equal(SearchResultSchema.safeParse({ recommendation: 6 }).success, false);
+    assert.equal(SearchResultSchema.safeParse({ recommendation: 0 }).success, false);
+  });
+
+  test("accepts an advice answer with no listings at all", () => {
+    const r = SearchResultSchema.safeParse({
+      mode: "advice",
+      advice: "Buy in smaller batches until you know what sells.",
+    });
+    assert.ok(r.success, JSON.stringify(r.error?.issues));
+  });
+
+  // Results stored before advice mode existed have no `mode` field. They must
+  // keep parsing, or every past search in the database becomes unreadable.
+  test("still accepts a result with no mode field", () => {
+    const r = SearchResultSchema.safeParse({
+      listing1: { store: "A", price: "$1" },
+      verdict: "Buy it.",
+    });
+    assert.ok(r.success);
+    assert.equal(r.success && r.data.mode, undefined);
+  });
+});
+
+describe("listingsOf", () => {
+  test("returns listings in order and ignores gaps", () => {
+    const l = (store: string) => ({ store, price: "$1" });
+    const out = listingsOf({
+      listing1: l("A"),
+      listing3: l("C"),
+      listing5: l("E"),
+    });
+    assert.deepEqual(out.map((x) => x!.store), ["A", "C", "E"]);
+  });
+
+  test("returns nothing for an advice answer", () => {
+    assert.equal(listingsOf({ mode: "advice", advice: "..." }).length, 0);
   });
 });
 

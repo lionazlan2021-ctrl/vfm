@@ -1,13 +1,23 @@
 /**
  * Subscription plans.
  *
- * A plan controls three things: which Claude model runs the search, how much
- * reasoning effort it spends, and how many searches are included each month.
+ * Tuned for minimum spend per search. In cost order the levers are:
  *
- * Every search is a paid Anthropic call with live web search, so the quota is
- * the real cost control. Free runs on Haiku to keep token usage minimal; Pro
- * and Premium both run on Sonnet 5, differentiated by effort and quota rather
- * than a different (more expensive) model.
+ *   1. maxSearches — dominant. Every web_search result set is re-sent as input
+ *      on the following turn, so each extra search compounds. Measured: 6
+ *      uncapped searches = 55k input tokens; 3 = 31k.
+ *   2. model — Haiku is roughly a tenth of Sonnet per token, and handles this
+ *      task well because the hard part (finding listings) is search, not
+ *      reasoning. Free and Pro both run on it.
+ *   3. maxTokens — caps the answer. Sized to the seller count, not left at a
+ *      generous flat number, since thinking and output share the budget.
+ *
+ * Reasoning effort is deliberately NOT a headline lever: measured at 225
+ * thinking tokens on a search, it is noise next to the three above.
+ *
+ * What a user actually gets is the seller count and the quota. Premium is the
+ * only tier that compares five sellers, which is the real reason to pay for it
+ * — everything else is a bigger number of the same thing.
  *
  * Billing is not wired up. `plan` is a field on the User row that an admin (or
  * a future Stripe webhook) can set; nothing here collects money.
@@ -34,6 +44,18 @@ export type Plan = {
    * and ~11s at a cap of 3. Three is enough to find three sellers.
    */
   maxSearches: number;
+  /**
+   * How many different sellers to compare. The headline difference between
+   * tiers — five gives a genuinely better read on what a fair price is than
+   * three does, and it's the one upgrade a user can see in the result itself.
+   */
+  sellersCompared: number;
+  /**
+   * Ceiling on the model's response. Thinking and the JSON answer share it, so
+   * it scales with seller count rather than sitting at a flat generous number
+   * that we pay for on every request.
+   */
+  maxTokens: number;
   /** Searches included per calendar month. */
   searchesPerMonth: number;
   /** Follow-up chat messages per hour. */
@@ -50,50 +72,63 @@ export const PLANS: Record<PlanId, Plan> = {
     tagline: "Enough to settle a purchase you're on the fence about.",
     model: "claude-haiku-4-5-20251001",
     searchEffort: "low",
+    // Not lowered to 2: three sellers is what the product promises, and a
+    // single search doesn't reliably surface three different retailers.
     maxSearches: 3,
+    sellersCompared: 3,
+    maxTokens: 3500,
     searchesPerMonth: 15,
     chatPerHour: 20,
     features: [
       "15 product searches a month",
       "Three sellers compared per search",
-      "Value-for-money score and verdict",
+      "Full value-for-money score and verdict",
       "Follow-up questions on your results",
+      "Business and buying advice, free-form",
       "Save and track listings",
     ],
   },
   pro: {
     id: "pro",
     name: "Pro",
-    price: 12,
+    price: 5,
     tagline: "For people who research before every purchase.",
-    model: "claude-sonnet-5",
+    // Same model as Free on purpose. What Pro buys is volume and a wider
+    // sweep per search, not a cleverer model — claiming otherwise would be
+    // a feature list that doesn't match what the code does.
+    model: "claude-haiku-4-5-20251001",
     searchEffort: "low",
-    maxSearches: 5,
-    searchesPerMonth: 200,
-    chatPerHour: 60,
+    maxSearches: 4,
+    sellersCompared: 3,
+    maxTokens: 3500,
+    searchesPerMonth: 300,
+    chatPerHour: 100,
     features: [
-      "200 product searches a month",
-      "Deeper model — reads more listings before judging",
-      "More thorough condition and seller-trust checks",
+      "300 product searches a month",
+      "Wider sweep — more listings read before judging",
       "Unlimited saved listings and price tracking",
       "Full search history, replayable at no cost",
+      "Everything in Free",
     ],
   },
   premium: {
     id: "premium",
     name: "Premium",
-    price: 29,
+    price: 10,
     tagline: "For high-value buys where being wrong is expensive.",
     model: "claude-sonnet-5",
     searchEffort: "medium",
-    maxSearches: 8,
-    searchesPerMonth: 1000,
-    chatPerHour: 200,
+    maxSearches: 7,
+    // The one difference you can see in the result itself.
+    sellersCompared: 5,
+    maxTokens: 6000,
+    searchesPerMonth: 1500,
+    chatPerHour: 300,
     features: [
-      "1,000 product searches a month",
-      "Maximum reasoning effort on every search",
-      "Best results on complex or high-ticket comparisons",
-      "Priority handling when demand is high",
+      "1,500 product searches a month",
+      "FIVE sellers compared, not three",
+      "Our strongest model, with more reasoning per search",
+      "Best on complex or high-ticket comparisons",
       "Everything in Pro",
     ],
   },

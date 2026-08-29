@@ -26,10 +26,21 @@ export type Listing = {
 };
 
 export type SearchResult = {
+  /**
+   * "advice" when the query was a question rather than a product — the same
+   * search box answers both. Absent means listings, so results stored before
+   * this existed still render.
+   */
+  mode?: "listings" | "advice";
   productSummary?: string;
+  /** Prose answer, present only when mode is "advice". */
+  advice?: string;
   listing1?: Listing;
   listing2?: Listing;
   listing3?: Listing;
+  /** Premium compares five sellers; other plans leave these empty. */
+  listing4?: Listing;
+  listing5?: Listing;
   verdict?: string;
   /** 1-based index of the listing the AI recommends. */
   recommendation?: number;

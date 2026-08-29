@@ -9,6 +9,7 @@ sticker price.
 ## What's real in this codebase
 
 - **Search** — calls the Anthropic API with live web search enabled (`app/api/search/route.ts`, `lib/ai.ts`). Not mock data.
+- **Business and buying advice** — the same search box answers questions ("should I buy stock in bulk for my shop?", "how do I price to make a profit?"). The model routes to an advice answer and skips web search entirely, which costs about a tenth of a product search (2.4k vs 23.7k input tokens).
 - **Value-for-money scoring** — the model must justify each 1–10 score with the specific tradeoff it weighed, and the listing it recommends is often *not* the cheapest one.
 - **Image upload** — real product identification via Claude's vision capability.
 - **Follow-up chat** — grounded in the listing data from the original search; says when something is outside that data instead of guessing.
@@ -95,19 +96,25 @@ runs the search, how hard it works, and the monthly allowance:
 
 | | Free | Pro | Premium |
 |---|---|---|---|
-| Price | $0 | $12/mo | $29/mo |
-| Searches | 15/month | 200/month | 1,000/month |
-| Model | `claude-haiku-4-5` | `claude-sonnet-5` | `claude-sonnet-5` |
+| Price | $0 | $5/mo | $10/mo |
+| Searches | 15/month | 300/month | 1,500/month |
+| Sellers compared | 3 | 3 | **5** |
+| Model | `claude-haiku-4-5` | `claude-haiku-4-5` | `claude-sonnet-5` |
 | Reasoning effort | low | low | medium |
-| Web searches per request | 3 | 5 | 8 |
-| Follow-up chat | 20/hour | 60/hour | 200/hour |
+| Web searches per request | 3 | 4 | 7 |
+| Response token ceiling | 3,500 | 3,500 | 6,000 |
+| Follow-up chat | 20/hour | 100/hour | 300/hour |
+
+Premium is the only tier that compares **five** sellers — the one upgrade a user
+can see in the result itself. Pro buys volume and a wider sweep, not a cleverer
+model, and its feature list says so rather than implying a better brain.
 
 **`maxSearches` is the setting that actually matters for cost and speed.** Left
 uncapped the model runs six or more sequential web searches, and every result
 set is re-sent as input on the following turn — measured at 55k input tokens and
-~48s. Capped at three it's 31k and ~11s. Reasoning effort barely moves either
-number (225 thinking tokens in that same request), so treat effort as a quality
-dial and `maxSearches` as the cost dial.
+~48s. Capped at three, with the current prompt, it's 23.7k and ~9s. Reasoning
+effort barely moves either number (225 thinking tokens in that same request), so
+treat effort as a quality dial and `maxSearches` as the cost dial.
 
 Don't set `maxSearches` below 3: the product promises three listings from three
 different sellers, and a lower cap makes that quietly unsatisfiable rather than

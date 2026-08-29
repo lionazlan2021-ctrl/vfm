@@ -63,7 +63,13 @@ export default function ResultsView({
   const [showTable, setShowTable] = useState(false);
   const verdictOut = useTypewriter(data.verdict || "");
 
-  const listings = [data.listing1, data.listing2, data.listing3].filter(Boolean) as Listing[];
+  const listings = [
+    data.listing1,
+    data.listing2,
+    data.listing3,
+    data.listing4,
+    data.listing5,
+  ].filter(Boolean) as Listing[];
 
   /**
    * `recommendation` is 1-based and may point at any listing — the premise of
@@ -76,6 +82,49 @@ export default function ResultsView({
     data.recommendation <= listings.length
       ? data.recommendation - 1
       : 0;
+
+  /**
+   * The query was a question, not a product. Rendered as prose rather than
+   * forced into the comparison layout, which would have nothing to compare.
+   */
+  if (data.mode === "advice" && data.advice?.trim()) {
+    return (
+      <div className="max-w-3xl mx-auto px-5 py-16 md:py-24">
+        <p className="eyebrow mb-4">Advice</p>
+        <h1
+          className="display mb-8"
+          style={{ fontSize: "clamp(1.7rem, 3.6vw, 2.5rem)", color: "var(--ink)", maxWidth: "20ch" }}
+        >
+          {query}
+        </h1>
+
+        <div className="panel p-6 md:p-8 mb-8">
+          {data.advice
+            .split(/\n{2,}/)
+            .map((para) => para.trim())
+            .filter(Boolean)
+            .map((para, i) => (
+              <p
+                key={i}
+                className="text-[15px] leading-relaxed"
+                style={{ color: "var(--ink-soft)", marginTop: i === 0 ? 0 : "1rem" }}
+              >
+                {para}
+              </p>
+            ))}
+        </div>
+
+        <p className="text-[13.5px] mb-6" style={{ color: "var(--ink-mute)" }}>
+          Looking for prices instead? Search a specific product — a brand and model
+          number works best.
+        </p>
+
+        <button onClick={onReset} className="btn">
+          New search
+        </button>
+      </div>
+    );
+  }
 
   if (listings.length === 0) {
     return (

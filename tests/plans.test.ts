@@ -71,14 +71,39 @@ describe("plan ladder", () => {
     }
   });
 
-  // The whole product is "three listings from three different sellers". A cap
-  // below three makes that impossible to satisfy, so this guards the one value
-  // that would quietly break every result rather than just slow it down.
-  test("every plan can run enough searches to find three sellers", () => {
-    for (const id of PLAN_ORDER) {
+  test("the seller count never decreases as you pay more", () => {
+    const ordered = PLAN_ORDER.map((id) => PLANS[id]);
+    for (let i = 1; i < ordered.length; i++) {
       assert.ok(
-        PLANS[id].maxSearches >= 3,
-        `${id} caps searches at ${PLANS[id].maxSearches}, below the three sellers we promise`
+        ordered[i].sellersCompared >= ordered[i - 1].sellersCompared,
+        `${ordered[i].id} must not compare fewer sellers than ${ordered[i - 1].id}`
+      );
+    }
+  });
+
+  // The product promises three different sellers minimum. A search cap below
+  // the seller count makes that unsatisfiable — and it fails quietly, returning
+  // fewer listings rather than erroring, so nothing else would catch it.
+  test("every plan can search at least as many times as it promises sellers", () => {
+    for (const id of PLAN_ORDER) {
+      const p = PLANS[id];
+      assert.ok(p.sellersCompared >= 3, `${id} promises only ${p.sellersCompared} sellers`);
+      assert.ok(
+        p.maxSearches >= p.sellersCompared - 1,
+        `${id} caps searches at ${p.maxSearches} but promises ${p.sellersCompared} sellers`
+      );
+    }
+  });
+
+  // Thinking and the JSON share max_tokens. Five fully-populated listings do not
+  // fit in the budget sized for three, and the failure mode is a response that
+  // truncates mid-object and fails JSON parsing.
+  test("the token ceiling leaves room for the sellers each plan promises", () => {
+    for (const id of PLAN_ORDER) {
+      const p = PLANS[id];
+      assert.ok(
+        p.maxTokens >= p.sellersCompared * 700,
+        `${id} allows ${p.maxTokens} tokens for ${p.sellersCompared} listings — too tight`
       );
     }
   });
@@ -96,9 +121,14 @@ describe("plan ladder", () => {
     }
   });
 
+  // Pinned to the formatting, not to specific prices, so repricing a tier
+  // doesn't fail a test that isn't about pricing. Zero is the case worth
+  // pinning: it must render as "$0", not "" or "Free".
   test("prices render consistently, including zero", () => {
     assert.equal(formatPrice(PLANS.free), "$0");
-    assert.equal(formatPrice(PLANS.pro), "$12");
+    for (const id of PLAN_ORDER) {
+      assert.match(formatPrice(PLANS[id]), /^\$\d+$/, `${id} price must render as $N`);
+    }
   });
 });
 

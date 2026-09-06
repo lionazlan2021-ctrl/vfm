@@ -71,6 +71,20 @@ function getClient() {
 // Response shape
 // ---------------------------------------------------------------------------
 
+/**
+ * pros/cons, accepting a bare string as a one-item list.
+ *
+ * The model is asked for arrays and usually obliges, but returns a single
+ * string often enough to matter — observed in the wild on a Premium search,
+ * where it cost a full corrective retry. Coercing here is one line and saves an
+ * entire extra API call; rejecting it would be pedantry at the user's expense.
+ * A blank string yields an empty list rather than [""].
+ */
+const StringList = z.preprocess(
+  (v) => (typeof v === "string" ? (v.trim() ? [v.trim()] : []) : v),
+  z.array(z.string())
+);
+
 const ListingSchema = z.object({
   store: z.string().min(1),
   price: z.string().min(1),
@@ -84,8 +98,8 @@ const ListingSchema = z.object({
   buyUrl: z.string().url().optional(),
   emoji: z.string().optional(),
   imageUrl: z.string().url().optional(),
-  pros: z.array(z.string()).optional(),
-  cons: z.array(z.string()).optional(),
+  pros: StringList.optional(),
+  cons: StringList.optional(),
   aiReason: z.string().optional(),
 });
 
@@ -128,7 +142,7 @@ export function listingsOf(result: ParsedSearchResult) {
  * every token here is paid for on every single search — this is deliberately
  * terser than prose would be.
  */
-function searchSystemPrompt(sellerCount: number): string {
+export function searchSystemPrompt(sellerCount: number): string {
   return `You are VFM AI — Value For Money. You answer two kinds of message.
 
 A) A PRODUCT to price up (a thing someone could buy). Compare sellers and judge
@@ -171,10 +185,16 @@ ${Array.from({ length: sellerCount - 1 }, (_, i) => ` "listing${i + 2}":{same sh
  "recommendation":1}
 
 RULES
-- All ${sellerCount} listings must be different sellers.
-- Never fabricate a price, rating or URL. If search didn't return one, say so in
-  aiReason and omit the field rather than inventing precision.
-- If results are thin or the product is unclear, say so plainly.
+- ALWAYS reply with the JSON object. Never prose, never an apology, never a
+  narrative summary — no matter how thin the search results were. There is no
+  situation where prose is the right answer. If you are tempted to explain a
+  problem, put that explanation inside "verdict" and still return JSON.
+- Fewer listings is fine. If you could only stand up 1 or 2 sellers with real
+  prices, return just those and say why in "verdict". Do NOT abandon the format
+  because you couldn't reach ${sellerCount}, and do NOT pad it with invented ones.
+- Aim for ${sellerCount} different sellers. Never the same seller twice.
+- Never fabricate a price, rating or URL. If search didn't return one, omit the
+  field and say so in aiReason rather than inventing precision.
 - sellerRating is 0-5. Omit rather than guess.
 - buyUrl must be a real URL from search. Omit rather than invent.`;
 }
@@ -232,6 +252,30 @@ export function extractJSON(text: string): unknown {
   }
 
   throw new ApiError("ai_unavailable", "The AI returned an unexpected response. Please try again.");
+}
+
+/**
+ * Extract + validate a search answer, or null if the text isn't one.
+ *
+ * Returns null rather than throwing because the caller retries once on a
+ * malformed answer — the two failure modes it absorbs (no JSON at all, and JSON
+ * that doesn't match the schema) are both worth one more attempt before giving
+ * the user an error.
+ */
+export function parseSearchAnswer(text: string): ParsedSearchResult | null {
+  let extracted: unknown;
+  try {
+    extracted = extractJSON(text);
+  } catch {
+    return null;
+  }
+
+  const parsed = SearchResultSchema.safeParse(extracted);
+  if (!parsed.success) {
+    console.error("[search] answer failed schema validation:", parsed.error.issues.slice(0, 3));
+    return null;
+  }
+  return parsed.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -372,34 +416,70 @@ export async function searchProducts({
     content.push({ type: "text", text: query });
   }
 
+  const baseParams = {
+    model,
+    // Thinking and the JSON answer share this budget. Sized to the seller
+    // count rather than a flat 8000 we pay for on every request.
+    max_tokens: maxTokens,
+    system: searchSystemPrompt(sellers),
+    ...(isHaikuModel(model)
+      ? { thinking: { type: "disabled" as const } }
+      : { thinking: { type: "adaptive" as const }, output_config: { effort } }),
+    tools: [webSearchTool(maxSearches) as unknown as Anthropic.ToolUnion],
+  };
+
   let raw: string;
   try {
     raw = await runToCompletion(client, {
-      model,
-      // Thinking and the JSON answer share this budget. Sized to the seller
-      // count rather than a flat 8000 we pay for on every request.
-      max_tokens: maxTokens,
-      system: searchSystemPrompt(sellers),
-      ...(isHaikuModel(model)
-        ? { thinking: { type: "disabled" } }
-        : { thinking: { type: "adaptive" }, output_config: { effort } }),
-      tools: [webSearchTool(maxSearches) as unknown as Anthropic.ToolUnion],
+      ...baseParams,
       messages: [{ role: "user", content }],
     });
   } catch (err) {
     translateSdkError(err, "search");
   }
 
-  const parsed = SearchResultSchema.safeParse(extractJSON(raw));
-  if (!parsed.success) {
-    console.error("[search] AI response failed schema validation:", parsed.error.issues);
+  let result = parseSearchAnswer(raw);
+
+  /**
+   * One corrective retry when the model answered in prose instead of JSON.
+   *
+   * This is not hypothetical: Haiku, on hitting its search cap with thin
+   * pricing data, would abandon the format and write an apology — producing a
+   * 503 for the user out of what was really a partial success. The prompt now
+   * forbids that, but format adherence is a tendency rather than a guarantee,
+   * especially on the smaller model, so the retry is the safety net.
+   *
+   * It reuses the transcript (no second round of web searches, so the expensive
+   * part isn't repeated) and only fires on the failure path.
+   */
+  if (!result) {
+    console.warn("[search] first answer was not valid JSON; retrying once");
+    try {
+      raw = await runToCompletion(client, {
+        ...baseParams,
+        messages: [
+          { role: "user", content },
+          { role: "assistant", content: raw.slice(0, 4000) },
+          {
+            role: "user",
+            content:
+              "That was prose. Reply again with ONLY the JSON object described in your instructions — no text before or after it. Use the findings you already have; do not search again. If you could only confirm one or two sellers, include just those and explain the gap in \"verdict\".",
+          },
+        ],
+      });
+    } catch (err) {
+      translateSdkError(err, "search");
+    }
+    result = parseSearchAnswer(raw);
+  }
+
+  if (!result) {
+    console.error("[search] model did not return valid JSON after a retry");
     throw new ApiError(
       "ai_unavailable",
       "The AI returned results in an unexpected format. Please try again."
     );
   }
-
-  const result = parsed.data;
 
   // An advice answer is complete without listings — only demand listings when
   // the model actually took the product path.

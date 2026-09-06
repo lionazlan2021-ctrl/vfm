@@ -6,6 +6,7 @@ import {
   SearchResultSchema,
   isSupportedImageType,
   listingsOf,
+  parseSearchAnswer,
 } from "../lib/ai";
 import { mockSearch } from "../lib/mock-search";
 import { ApiError } from "../lib/errors";
@@ -146,6 +147,31 @@ describe("SearchResultSchema", () => {
     assert.equal(SearchResultSchema.safeParse({ recommendation: 0 }).success, false);
   });
 
+  // Observed live: the model returned pros/cons as a bare string on a Premium
+  // search, which cost a corrective retry. Coerced rather than rejected.
+  test("accepts pros/cons as a bare string and wraps it into a list", () => {
+    const r = SearchResultSchema.safeParse({
+      listing1: { store: "A", price: "$1", pros: "Fast delivery", cons: "Pricey" },
+    });
+    assert.ok(r.success, JSON.stringify(r.error?.issues));
+    assert.deepEqual(r.success && r.data.listing1?.pros, ["Fast delivery"]);
+    assert.deepEqual(r.success && r.data.listing1?.cons, ["Pricey"]);
+  });
+
+  test("an empty pros string becomes an empty list, not a blank entry", () => {
+    const r = SearchResultSchema.safeParse({ listing1: { store: "A", price: "$1", pros: "  " } });
+    assert.ok(r.success);
+    assert.deepEqual(r.success && r.data.listing1?.pros, []);
+  });
+
+  test("still accepts pros/cons as proper arrays", () => {
+    const r = SearchResultSchema.safeParse({
+      listing1: { store: "A", price: "$1", pros: ["one", "two"], cons: [] },
+    });
+    assert.ok(r.success);
+    assert.deepEqual(r.success && r.data.listing1?.pros, ["one", "two"]);
+  });
+
   test("accepts an advice answer with no listings at all", () => {
     const r = SearchResultSchema.safeParse({
       mode: "advice",
@@ -212,5 +238,27 @@ describe("mock search fixture", () => {
     const r = mockSearch("anything", false);
     const stores = [r.listing1!.store, r.listing2!.store, r.listing3!.store];
     assert.equal(new Set(stores).size, 3);
+  });
+});
+
+describe("parseSearchAnswer", () => {
+  test("returns a result for valid JSON", () => {
+    const r = parseSearchAnswer('{"mode":"listings","listing1":{"store":"A","price":"$1"}}');
+    assert.ok(r);
+    assert.equal(r?.listing1?.store, "A");
+  });
+
+  // This is the exact failure that took search down: Haiku hit its search cap,
+  // gave up on the format and wrote an apology. Returning null (rather than
+  // throwing) is what lets searchProducts retry instead of 503ing the user.
+  test("returns null for a prose answer, so the caller can retry", () => {
+    const prose =
+      "I found current listings but hit a search limit. The results show very " +
+      "limited pricing data, and I cannot give you a complete three-seller comparison.";
+    assert.equal(parseSearchAnswer(prose), null);
+  });
+
+  test("returns null for JSON that violates the schema", () => {
+    assert.equal(parseSearchAnswer('{"listing1":{"store":"A","price":"$1","valueScore":99}}'), null);
   });
 });

@@ -35,6 +35,18 @@ const SearchSchema = z
     message: `Unsupported image type. Use one of: ${SUPPORTED_IMAGE_TYPES.join(", ")}.`,
   });
 
+/**
+ * Searches are slow by nature: several sequential web_search round trips, then
+ * the value judgement. Measured 15s on Free and up to ~55s on Premium (five
+ * sellers, seven searches), and a corrective retry on top of that when the
+ * model bungles the JSON.
+ *
+ * Left unset this inherits a platform default that is well under those numbers,
+ * which would kill the request mid-search and surface as a generic failure
+ * rather than anything diagnosable.
+ */
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   return handle("search", async () => {
     const session = await getCurrentSession();

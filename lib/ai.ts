@@ -133,6 +133,82 @@ export function listingsOf(result: ParsedSearchResult) {
   );
 }
 
+/**
+ * Identity of a retailer, for deciding whether two listings are really the same
+ * seller. Strips the qualifiers the model likes to append — a variant in
+ * parentheses, a marketplace seller's name — so "Walmart" and "Walmart
+ * (Graphite variant)" collapse to one, as do two different eBay sellers.
+ *
+ * Deliberately an exact match after normalising rather than anything fuzzy:
+ * merging "Target" into "Target Plus" would be worse than leaving them apart.
+ */
+export function sellerKey(store: string): string {
+  return store
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ") // "(Graphite variant)", "(A2zSuperDeals)"
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/\bsold by\b.*$/, " ") // "Best Buy sold by Staples"
+    .replace(/\bvia\b.*$/, " ")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Drops listings that repeat a retailer already present, keeping the first.
+ *
+ * Two listings from one retailer aren't a comparison, which is the entire
+ * product — so this is enforced in code rather than left to the prompt, which
+ * asks for distinct sellers but was observed returning "Walmart" twice.
+ *
+ * `recommendation` is a 1-based index into the listings, so it is remapped to
+ * follow the listing it pointed at. If it pointed at a listing that was dropped,
+ * it moves to the surviving listing from that same retailer — the one whose
+ * duplicate it was — rather than silently pointing at an unrelated seller.
+ */
+export function dedupeSellers(result: ParsedSearchResult): ParsedSearchResult {
+  const original = listingsOf(result);
+  if (original.length < 2) return result;
+
+  const kept: NonNullable<(typeof original)[number]>[] = [];
+  /** Original 1-based index -> new 1-based index. */
+  const moved = new Map<number, number>();
+  const keyToNewIndex = new Map<string, number>();
+
+  original.forEach((listing, i) => {
+    const key = sellerKey(listing!.store);
+    const existing = keyToNewIndex.get(key);
+    if (existing !== undefined) {
+      // Duplicate: it disappears, and anything pointing at it follows its twin.
+      moved.set(i + 1, existing);
+      return;
+    }
+    kept.push(listing!);
+    const newIndex = kept.length;
+    keyToNewIndex.set(key, newIndex);
+    moved.set(i + 1, newIndex);
+  });
+
+  if (kept.length === original.length) return result;
+
+  console.warn(
+    `[search] dropped ${original.length - kept.length} duplicate seller(s): ` +
+      original.map((l) => l!.store).join(", ")
+  );
+
+  const next: ParsedSearchResult = {
+    ...result,
+    listing1: kept[0],
+    listing2: kept[1],
+    listing3: kept[2],
+    listing4: kept[3],
+    listing5: kept[4],
+  };
+
+  if (typeof result.recommendation === "number") {
+    next.recommendation = moved.get(result.recommendation) ?? 1;
+  }
+  return next;
+}
+
 // ---------------------------------------------------------------------------
 // Prompts
 // ---------------------------------------------------------------------------
@@ -192,7 +268,13 @@ RULES
 - Fewer listings is fine. If you could only stand up 1 or 2 sellers with real
   prices, return just those and say why in "verdict". Do NOT abandon the format
   because you couldn't reach ${sellerCount}, and do NOT pad it with invented ones.
-- Aim for ${sellerCount} different sellers. Never the same seller twice.
+- Aim for ${sellerCount} DIFFERENT retailers. Two listings from the same retailer
+  are not a comparison, so they are never allowed — this includes a different
+  colour or variant of the same product, a different marketplace seller on the
+  same platform, and the same retailer written differently. "Walmart" and
+  "Walmart (Graphite)" are ONE seller, as are two eBay sellers. If you can only
+  confirm two distinct retailers, return two listings and say so in "verdict"
+  rather than filling the third slot with a repeat.
 - Never fabricate a price, rating or URL. If search didn't return one, omit the
   field and say so in aiReason rather than inventing precision.
 - sellerRating is 0-5. Omit rather than guess.
@@ -496,7 +578,11 @@ export async function searchProducts({
       "No listings were found for that product. Try a more specific product name."
     );
   }
-  return result;
+
+  // Last line of defence on the product's core promise: different sellers.
+  // Showing two of the same retailer would look like a comparison without
+  // being one, which is worse than showing fewer listings.
+  return dedupeSellers(result);
 }
 
 // ---------------------------------------------------------------------------

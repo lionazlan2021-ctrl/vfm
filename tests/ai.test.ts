@@ -7,6 +7,8 @@ import {
   isSupportedImageType,
   listingsOf,
   parseSearchAnswer,
+  sellerKey,
+  dedupeSellers,
 } from "../lib/ai";
 import { mockSearch } from "../lib/mock-search";
 import { ApiError } from "../lib/errors";
@@ -260,5 +262,84 @@ describe("parseSearchAnswer", () => {
 
   test("returns null for JSON that violates the schema", () => {
     assert.equal(parseSearchAnswer('{"listing1":{"store":"A","price":"$1","valueScore":99}}'), null);
+  });
+});
+
+describe("sellerKey", () => {
+  test("treats a variant or marketplace qualifier as the same retailer", () => {
+    assert.equal(sellerKey("Walmart"), sellerKey("Walmart (Graphite variant)"));
+    assert.equal(sellerKey("eBay (A2zSuperDeals)"), sellerKey("eBay (SomeOtherSeller)"));
+    assert.equal(sellerKey("Best Buy"), sellerKey("Best Buy sold by Staples"));
+    assert.equal(sellerKey("Best Buy"), sellerKey("BestBuy"));
+    assert.equal(sellerKey("amazon"), sellerKey("Amazon"));
+  });
+
+  // Over-merging would be worse than under-merging: it would delete a genuine
+  // second seller and leave the shopper with a thinner comparison.
+  test("keeps genuinely different retailers apart", () => {
+    assert.notEqual(sellerKey("Target"), sellerKey("Target Plus"));
+    assert.notEqual(sellerKey("Amazon"), sellerKey("Amazon Warehouse"));
+    assert.notEqual(sellerKey("Walmart"), sellerKey("Newegg"));
+  });
+});
+
+describe("dedupeSellers", () => {
+  const l = (store: string, price = "$1") => ({ store, price });
+
+  test("leaves distinct sellers untouched", () => {
+    const r = { listing1: l("Amazon"), listing2: l("Walmart"), listing3: l("Best Buy"), recommendation: 2 };
+    assert.deepEqual(dedupeSellers(r), r);
+  });
+
+  // The exact case seen live: Walmart returned twice, as a "variant".
+  test("drops a repeated retailer and closes the gap", () => {
+    const out = dedupeSellers({
+      listing1: l("Best Buy"),
+      listing2: l("Walmart"),
+      listing3: l("Walmart (Graphite variant)"),
+      recommendation: 1,
+    });
+    assert.deepEqual(listingsOf(out).map((x) => x!.store), ["Best Buy", "Walmart"]);
+    assert.equal(out.listing3, undefined);
+  });
+
+  test("moves the recommendation with the listing it pointed at", () => {
+    // Recommendation points at Best Buy (position 3). After the duplicate
+    // Amazon at position 2 is dropped, Best Buy is position 2.
+    const out = dedupeSellers({
+      listing1: l("Amazon"),
+      listing2: l("Amazon (Renewed listing)"),
+      listing3: l("Best Buy"),
+      recommendation: 3,
+    });
+    assert.deepEqual(listingsOf(out).map((x) => x!.store), ["Amazon", "Best Buy"]);
+    assert.equal(out.recommendation, 2, "recommendation must still point at Best Buy");
+  });
+
+  test("a recommendation pointing at a dropped duplicate follows its twin", () => {
+    const out = dedupeSellers({
+      listing1: l("Amazon"),
+      listing2: l("Walmart"),
+      listing3: l("Walmart (Blue)"),
+      recommendation: 3, // the duplicate Walmart
+    });
+    assert.equal(out.recommendation, 2, "should point at the surviving Walmart");
+    assert.equal(listingsOf(out)[out.recommendation! - 1]!.store, "Walmart");
+  });
+
+  test("never leaves the recommendation pointing past the listings", () => {
+    const out = dedupeSellers({
+      listing1: l("Amazon"),
+      listing2: l("Amazon (A)"),
+      listing3: l("Amazon (B)"),
+      recommendation: 3,
+    });
+    assert.equal(listingsOf(out).length, 1);
+    assert.ok(out.recommendation! >= 1 && out.recommendation! <= listingsOf(out).length);
+  });
+
+  test("does nothing to an advice answer", () => {
+    const r = { mode: "advice" as const, advice: "Buy less, sell faster." };
+    assert.deepEqual(dedupeSellers(r), r);
   });
 });

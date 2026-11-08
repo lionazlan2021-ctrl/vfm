@@ -85,6 +85,26 @@ describe("extractJSON", () => {
     assert.deepEqual(extractJSON('{"a":"say \\"hi\\" }","b":2}'), { a: 'say "hi" }', b: 2 });
   });
 
+  // TV and monitor sizes: the model writes the inch mark unescaped.
+  test("repairs a bare inch mark inside a string", () => {
+    assert.deepEqual(extractJSON('{"productSummary":"Samsung 55" Crystal UHD TV","x":1}'), {
+      productSummary: 'Samsung 55" Crystal UHD TV',
+      x: 1,
+    });
+  });
+
+  test("repairs a raw line break inside a string", () => {
+    assert.deepEqual(extractJSON('{"verdict":"Buy the Walmart one.\nIt ships fastest."}'), {
+      verdict: "Buy the Walmart one.\nIt ships fastest.",
+    });
+  });
+
+  test("leaves valid JSON with escapes and colons in strings unchanged", () => {
+    const valid = { a: 'he said "ok": fine', b: "x}y", c: ["1", "2"], d: { e: "\\" } };
+    assert.deepEqual(extractJSON(JSON.stringify(valid)), valid);
+    assert.deepEqual(extractJSON(JSON.stringify(valid, null, 2)), valid);
+  });
+
   test("throws a user-safe ApiError when there is no JSON", () => {
     assert.throws(() => extractJSON("I could not find anything."), (err: unknown) => {
       assert.ok(err instanceof ApiError);
@@ -102,25 +122,67 @@ describe("SearchResultSchema", () => {
     assert.ok(parsed.success, JSON.stringify(parsed.error?.issues));
   });
 
-  test("rejects a value score outside 1-10", () => {
+  // One bad field costs that field, not the whole search: the UI renders a
+  // missing score as "Not rated" and a missing link as no button.
+  test("drops a value score outside 1-10 but keeps the listing", () => {
     const r = SearchResultSchema.safeParse({
       listing1: { store: "A", price: "$1", valueScore: 47 },
     });
-    assert.equal(r.success, false);
+    assert.ok(r.success);
+    assert.equal(r.success && r.data.listing1?.valueScore, undefined);
+    assert.equal(r.success && r.data.listing1?.store, "A");
   });
 
-  test("rejects a seller rating outside 0-5", () => {
+  test("drops a seller rating outside 0-5 but keeps the listing", () => {
     const r = SearchResultSchema.safeParse({
       listing1: { store: "A", price: "$1", sellerRating: 9 },
     });
-    assert.equal(r.success, false);
+    assert.ok(r.success);
+    assert.equal(r.success && r.data.listing1?.sellerRating, undefined);
   });
 
-  test("rejects a non-URL buyUrl rather than rendering a broken link", () => {
+  test("drops a non-URL buyUrl rather than rendering a broken link", () => {
     const r = SearchResultSchema.safeParse({
       listing1: { store: "A", price: "$1", buyUrl: "not-a-url" },
     });
-    assert.equal(r.success, false);
+    assert.ok(r.success);
+    assert.equal(r.success && r.data.listing1?.buyUrl, undefined);
+  });
+
+  // The exact live failure: Haiku wrote "valueScore": null for an out-of-stock
+  // Amazon listing, the whole result was rejected (twice, retry included), and
+  // the shopper saw "unexpected format" for an otherwise complete answer.
+  test("treats null in any optional field as absent", () => {
+    const r = SearchResultSchema.safeParse({
+      listing1: {
+        store: "Amazon",
+        price: "Out of Stock",
+        valueScore: null,
+        sellerRating: null,
+        buyUrl: null,
+        condition: null,
+        pros: null,
+        aiReason: null,
+      },
+      productSummary: null,
+      recommendation: null,
+    });
+    assert.ok(r.success, JSON.stringify(r.error?.issues));
+    assert.equal(r.success && r.data.listing1?.valueScore, undefined);
+    assert.equal(r.success && r.data.listing1?.store, "Amazon");
+  });
+
+  test("drops a listing with no store or price, keeping the others", () => {
+    const r = SearchResultSchema.safeParse({
+      listing1: { store: "A", price: "$1" },
+      listing2: { store: "", price: "$2" },
+      listing3: { store: "C", price: null },
+      listing4: { store: "D", price: "$4" },
+    });
+    assert.ok(r.success, JSON.stringify(r.error?.issues));
+    assert.equal(r.success && r.data.listing2, undefined);
+    assert.equal(r.success && r.data.listing3, undefined);
+    assert.equal(r.success && r.data.listing4?.store, "D");
   });
 
   test("allows a listing with no buyUrl (the AI is told to omit it, not invent one)", () => {
@@ -144,9 +206,12 @@ describe("SearchResultSchema", () => {
 
   // recommendation is a 1-based index into the listings. Allowing 6 when at most
   // five exist would point the "best value" badge at nothing.
-  test("rejects a recommendation beyond the fifth listing", () => {
-    assert.equal(SearchResultSchema.safeParse({ recommendation: 6 }).success, false);
-    assert.equal(SearchResultSchema.safeParse({ recommendation: 0 }).success, false);
+  test("discards a recommendation outside 1-5", () => {
+    for (const recommendation of [6, 0, 2.5]) {
+      const r = SearchResultSchema.safeParse({ recommendation });
+      assert.ok(r.success);
+      assert.equal(r.success && r.data.recommendation, undefined);
+    }
   });
 
   // Observed live: the model returned pros/cons as a bare string on a Premium
@@ -260,8 +325,17 @@ describe("parseSearchAnswer", () => {
     assert.equal(parseSearchAnswer(prose), null);
   });
 
-  test("returns null for JSON that violates the schema", () => {
-    assert.equal(parseSearchAnswer('{"listing1":{"store":"A","price":"$1","valueScore":99}}'), null);
+  test("returns null when the JSON isn't an object", () => {
+    assert.equal(parseSearchAnswer('["not", "a", "result"]'), null);
+  });
+
+  test("accepts the live answer that used to fail on a null valueScore", () => {
+    const r = parseSearchAnswer(
+      '{"mode":"listings","listing1":{"store":"Amazon","price":"Out of Stock","valueScore":null},' +
+        '"listing2":{"store":"Best Buy","price":"$249.99","valueScore":6},"recommendation":2}'
+    );
+    assert.ok(r);
+    assert.equal(r?.listing2?.valueScore, 6);
   });
 });
 
@@ -336,6 +410,19 @@ describe("dedupeSellers", () => {
     });
     assert.equal(listingsOf(out).length, 1);
     assert.ok(out.recommendation! >= 1 && out.recommendation! <= listingsOf(out).length);
+  });
+
+  // A listing the schema dropped leaves a hole; the recommendation names a
+  // slot number, so it has to move when the hole is closed.
+  test("closes a hole left by a dropped listing and re-points the recommendation", () => {
+    const out = dedupeSellers({
+      listing1: l("Amazon"),
+      listing3: l("Best Buy"),
+      recommendation: 3,
+    });
+    assert.deepEqual(listingsOf(out).map((x) => x!.store), ["Amazon", "Best Buy"]);
+    assert.equal(out.listing2?.store, "Best Buy");
+    assert.equal(out.recommendation, 2, "must still point at Best Buy");
   });
 
   test("does nothing to an advice answer", () => {

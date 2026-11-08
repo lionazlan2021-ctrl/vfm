@@ -106,7 +106,7 @@ export default function ResultsView({
             .map((para, i) => (
               <p
                 key={i}
-                className="text-[15px] leading-relaxed"
+                className="text-[15px] leading-relaxed whitespace-pre-line"
                 style={{ color: "var(--ink-soft)", marginTop: i === 0 ? 0 : "1rem" }}
               >
                 {para}

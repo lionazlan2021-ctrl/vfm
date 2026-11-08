@@ -85,22 +85,48 @@ const StringList = z.preprocess(
   z.array(z.string())
 );
 
+/**
+ * An optional field where null, or a value that fails validation, simply
+ * becomes absent.
+ *
+ * The model is told to omit a field it can't fill, but writes `null` instead
+ * often enough to matter — observed live as `"valueScore": null` on an
+ * out-of-stock listing, which failed the whole result, failed the corrective
+ * retry the same way, and showed the shopper "unexpected format" for an answer
+ * that was otherwise perfectly good. One unusable field must cost that field,
+ * not the search. The UI already renders every optional field as missing.
+ */
+function lenient<T extends z.ZodTypeAny>(schema: T) {
+  return schema.optional().catch(undefined);
+}
+
 const ListingSchema = z.object({
-  store: z.string().min(1),
-  price: z.string().min(1),
-  originalPrice: z.string().nullable().optional(),
-  condition: z.string().optional(),
-  shipping: z.string().optional(),
-  delivery: z.string().optional(),
-  warranty: z.string().optional(),
-  sellerRating: z.number().min(0).max(5).nullable().optional(),
-  valueScore: z.number().min(1).max(10).optional(),
-  buyUrl: z.string().url().optional(),
-  emoji: z.string().optional(),
-  imageUrl: z.string().url().optional(),
-  pros: StringList.optional(),
-  cons: StringList.optional(),
-  aiReason: z.string().optional(),
+  store: z.string().trim().min(1),
+  price: z.string().trim().min(1),
+  originalPrice: lenient(z.string().nullable()),
+  condition: lenient(z.string()),
+  shipping: lenient(z.string()),
+  delivery: lenient(z.string()),
+  warranty: lenient(z.string()),
+  sellerRating: lenient(z.number().min(0).max(5).nullable()),
+  valueScore: lenient(z.number().min(1).max(10)),
+  // A malformed URL is dropped rather than rendered as a broken link.
+  buyUrl: lenient(z.string().url()),
+  emoji: lenient(z.string()),
+  imageUrl: lenient(z.string().url()),
+  pros: lenient(StringList),
+  cons: lenient(StringList),
+  aiReason: lenient(z.string()),
+});
+
+/**
+ * A listing slot. A listing missing its store or price can't be shown, so it is
+ * dropped on its own rather than taking the other listings down with it;
+ * `dedupeSellers` then closes the gap and re-points the recommendation.
+ */
+const ListingSlot = ListingSchema.optional().catch((ctx) => {
+  console.warn("[search] dropped an unusable listing:", ctx.error.issues.slice(0, 2));
+  return undefined;
 });
 
 export const SearchResultSchema = z.object({
@@ -110,18 +136,19 @@ export const SearchResultSchema = z.object({
    * search box means it as a question, not a product to price up. Absent means
    * listings, so older stored results keep parsing.
    */
-  mode: z.enum(["listings", "advice"]).optional(),
-  productSummary: z.string().optional(),
+  mode: lenient(z.enum(["listings", "advice"])),
+  productSummary: lenient(z.string()),
   /** Prose answer, when mode is "advice". No web search, no listings. */
-  advice: z.string().optional(),
-  listing1: ListingSchema.optional(),
-  listing2: ListingSchema.optional(),
-  listing3: ListingSchema.optional(),
+  advice: lenient(z.string()),
+  listing1: ListingSlot,
+  listing2: ListingSlot,
+  listing3: ListingSlot,
   // Only ever populated on Premium, which compares five sellers.
-  listing4: ListingSchema.optional(),
-  listing5: ListingSchema.optional(),
-  verdict: z.string().optional(),
-  recommendation: z.number().int().min(1).max(5).optional(),
+  listing4: ListingSlot,
+  listing5: ListingSlot,
+  verdict: lenient(z.string()),
+  // Out of range means it points at nothing; the UI then falls back to the first listing.
+  recommendation: lenient(z.number().int().min(1).max(5)),
 });
 
 export type ParsedSearchResult = z.infer<typeof SearchResultSchema>;
@@ -165,34 +192,43 @@ export function sellerKey(store: string): string {
  * duplicate it was — rather than silently pointing at an unrelated seller.
  */
 export function dedupeSellers(result: ParsedSearchResult): ParsedSearchResult {
-  const original = listingsOf(result);
-  if (original.length < 2) return result;
+  // Walked by slot number, not by position among present listings, because
+  // `recommendation` names a slot and a slot can be empty (an unusable listing
+  // dropped by the schema leaves a hole).
+  const slots = [result.listing1, result.listing2, result.listing3, result.listing4, result.listing5];
+  const lastFilled = slots.reduce((last, l, i) => (l ? i + 1 : last), 0);
 
-  const kept: NonNullable<(typeof original)[number]>[] = [];
-  /** Original 1-based index -> new 1-based index. */
+  const kept: NonNullable<(typeof slots)[number]>[] = [];
+  /** Original slot number -> new 1-based index. */
   const moved = new Map<number, number>();
   const keyToNewIndex = new Map<string, number>();
+  let duplicates = 0;
 
-  original.forEach((listing, i) => {
-    const key = sellerKey(listing!.store);
+  slots.forEach((listing, i) => {
+    if (!listing) return;
+    const key = sellerKey(listing.store);
     const existing = keyToNewIndex.get(key);
     if (existing !== undefined) {
       // Duplicate: it disappears, and anything pointing at it follows its twin.
       moved.set(i + 1, existing);
+      duplicates++;
       return;
     }
-    kept.push(listing!);
+    kept.push(listing);
     const newIndex = kept.length;
     keyToNewIndex.set(key, newIndex);
     moved.set(i + 1, newIndex);
   });
 
-  if (kept.length === original.length) return result;
+  // Nothing removed and no holes to close.
+  if (kept.length === lastFilled) return result;
 
-  console.warn(
-    `[search] dropped ${original.length - kept.length} duplicate seller(s): ` +
-      original.map((l) => l!.store).join(", ")
-  );
+  if (duplicates > 0) {
+    console.warn(
+      `[search] dropped ${duplicates} duplicate seller(s): ` +
+        slots.filter(Boolean).map((l) => l!.store).join(", ")
+    );
+  }
 
   const next: ParsedSearchResult = {
     ...result,
@@ -231,8 +267,10 @@ If it is B, reply ONLY with:
 {"mode":"advice","advice":"your answer, 2-5 short paragraphs, specific and practical"}
 
 Otherwise it is A. Then:
-1. Identify the exact product (brand, model, size, variant). If ambiguous, pick
-   the likeliest reading and say so in productSummary.
+1. Identify the exact product (brand, model, size, variant). Never ask the
+   shopper which one they mean — this is one-shot, they cannot reply. If it is
+   ambiguous ("Nike Air Force 1", "iPhone"), price the most popular current
+   variant (e.g. Men's Air Force 1 '07 Low, White) and name it in productSummary.
 2. Use web_search to find real, current listings from ${sellerCount} DIFFERENT trusted
    sellers (Amazon, Best Buy, Walmart, Target, Newegg, B&H, eBay, Noon, AliExpress).
    Never recall prices, ratings or URLs from memory — search first, every time.
@@ -262,7 +300,8 @@ ${Array.from({ length: sellerCount - 1 }, (_, i) => ` "listing${i + 2}":{same sh
 
 RULES
 - ALWAYS reply with the JSON object. Never prose, never an apology, never a
-  narrative summary — no matter how thin the search results were. There is no
+  clarifying question, never a narrative summary — no matter how thin the
+  search results were. There is no
   situation where prose is the right answer. If you are tempted to explain a
   problem, put that explanation inside "verdict" and still return JSON.
 - Fewer listings is fine. If you could only stand up 1 or 2 sellers with real
@@ -278,6 +317,7 @@ RULES
 - Never fabricate a price, rating or URL. If search didn't return one, omit the
   field and say so in aiReason rather than inventing precision.
 - sellerRating is 0-5. Omit rather than guess.
+- Inside JSON strings write sizes as 55-inch, never a bare " mark.
 - buyUrl must be a real URL from search. Omit rather than invent.`;
 }
 
@@ -299,6 +339,14 @@ export function extractJSON(text: string): unknown {
     throw new ApiError("ai_unavailable", "The AI returned an unexpected response. Please try again.");
   }
 
+  /**
+   * The scan also repairs the two ways the model most often breaks otherwise
+   * good JSON: a bare `"` inside a string (an inch mark — `Samsung 55" TV`) and
+   * a raw line break inside a string. In valid JSON a closing quote is always
+   * followed by `,` `}` `]` or `:`, so a quote followed by anything else is
+   * escaped as text — which leaves valid JSON byte-for-byte unchanged.
+   */
+  let out = "";
   let depth = 0;
   let inString = false;
   let escaped = false;
@@ -306,26 +354,43 @@ export function extractJSON(text: string): unknown {
   for (let i = start; i < cleaned.length; i++) {
     const ch = cleaned[i];
 
-    if (escaped) {
-      escaped = false;
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        out += ch;
+      } else if (ch === "\\") {
+        escaped = true;
+        out += ch;
+      } else if (ch === '"') {
+        let j = i + 1;
+        while (j < cleaned.length && /\s/.test(cleaned[j])) j++;
+        const next = cleaned[j];
+        if (next === undefined || ",}]:".includes(next)) {
+          inString = false;
+          out += ch;
+        } else {
+          out += '\\"';
+        }
+      } else if (ch === "\n") {
+        out += "\\n";
+      } else if (ch === "\r") {
+        out += "\\r";
+      } else if (ch === "\t") {
+        out += "\\t";
+      } else {
+        out += ch;
+      }
       continue;
     }
-    if (ch === "\\") {
-      escaped = true;
-      continue;
-    }
-    if (ch === '"') {
-      inString = !inString;
-      continue;
-    }
-    if (inString) continue;
 
-    if (ch === "{") depth++;
+    out += ch;
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
     else if (ch === "}") {
       depth--;
       if (depth === 0) {
         try {
-          return JSON.parse(cleaned.slice(start, i + 1));
+          return JSON.parse(out);
         } catch {
           break;
         }
@@ -545,7 +610,7 @@ export async function searchProducts({
           {
             role: "user",
             content:
-              "That was prose. Reply again with ONLY the JSON object described in your instructions — no text before or after it. Use the findings you already have; do not search again. If you could only confirm one or two sellers, include just those and explain the gap in \"verdict\".",
+              "That wasn't the JSON object. Reply again with ONLY the JSON object described in your instructions — no text before or after it, and no questions: the shopper cannot reply. If the product was ambiguous, price its most popular variant and name it in productSummary. If you could only confirm one or two sellers, include just those and explain the gap in \"verdict\". If the message was really a question rather than a product, use the advice format.",
           },
         ],
       });
@@ -556,6 +621,24 @@ export async function searchProducts({
   }
 
   if (!result) {
+    const prose = raw.trim();
+    /**
+     * Still prose after the retry. The search has already been paid for and
+     * counted against the shopper's quota, so showing them what the model
+     * actually said (typically "which variant do you mean?") beats an error
+     * that tells them nothing. Not done when the text looks like broken JSON,
+     * which would render as gibberish.
+     */
+    if (prose && !prose.includes('"listing1"') && !prose.startsWith("{")) {
+      console.warn("[search] no JSON after retry; returning the model's text as advice");
+      // The advice view renders plain text, so strip the markdown emphasis and
+      // headings the model reaches for in prose.
+      const plain = prose
+        .replace(/\*\*|__/g, "")
+        .replace(/^#{1,6}\s+/gm, "")
+        .slice(0, 4000);
+      return { mode: "advice", advice: plain };
+    }
     console.error("[search] model did not return valid JSON after a retry");
     throw new ApiError(
       "ai_unavailable",

@@ -275,3 +275,94 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ------------------------------------------------------------------ Keys */
+
+/* A keyboard key, for shortcut hints. Mono so it reads as an input, not prose. */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11.5px;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+}
+
+.shortcuts-dialog {
+  width: min(460px, calc(100vw - 32px));
+  padding: 0;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-card);
+}
+
+.shortcuts-dialog::backdrop {
+  background: rgba(23, 25, 15, 0.36);
+}
+
+.shortcuts-dialog[open] {
+  animation: riseIn 0.22s ease both;
+}
+
+/* Lands a scrolled-to seller card below the sticky search bar, not under it. */
+.scroll-target {
+  scroll-margin-top: 84px;
+}
+
+/* A brief ring on the card a number shortcut just jumped to. */
+.flash-target {
+  animation: flashRing 1.1s ease;
+}
+
+@keyframes flashRing {
+  0% { box-shadow: 0 0 0 0 rgba(31, 111, 67, 0); }
+  25% { box-shadow: 0 0 0 4px rgba(31, 111, 67, 0.35); }
+  100% { box-shadow: 0 0 0 0 rgba(31, 111, 67, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shortcuts-dialog[open],
+  .flash-target {
+    animation: none;
+  }
+}
+
+/* Suggestion chip ("Try AirPods Pro 2"). Quiet until hovered: it's a shortcut,
+   not a call to action, so it must not compete with the Compare button. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 13px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+
+.chip:hover {
+  border-color: var(--accent);
+  color: var(--accent-deep);
+  background: var(--accent-wash);
+}
+
+.chip:active {
+  transform: scale(0.97);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

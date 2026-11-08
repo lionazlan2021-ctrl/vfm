@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { User, HistoryEntry, SavedEntry, Usage } from "@/types";
+import Logo from "./Logo";
 
 const CATEGORIES = ["Electronics", "Gaming", "Fashion", "Fitness", "Home", "Office"];
 
@@ -19,6 +20,7 @@ export default function Sidebar({
   onLogout,
   onShowAuth,
   onRemoveSaved,
+  onShowShortcuts,
   mobileOpen,
   onCloseMobile,
 }: {
@@ -36,6 +38,7 @@ export default function Sidebar({
   onLogout: () => void;
   onShowAuth: () => void;
   onRemoveSaved: (id: string) => void;
+  onShowShortcuts: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
 }) {
@@ -56,8 +59,8 @@ export default function Sidebar({
         className="px-4 py-4 flex items-center justify-between"
         style={{ borderBottom: "1px solid var(--rule)" }}
       >
-        <Link href="/" className="display text-[19px]" style={{ color: "var(--ink)" }}>
-          VFM<span style={{ color: "var(--accent)" }}>.</span>
+        <Link href="/" aria-label="VFM home">
+          <Logo size={19} />
         </Link>
         <button
           onClick={onCloseMobile}
@@ -269,6 +272,15 @@ export default function Sidebar({
             </button>
           </>
         )}
+        {/* Keyboard users only: hidden on phones, where there are no shortcuts. */}
+        <button
+          onClick={onShowShortcuts}
+          className="nav-link hidden md:flex items-center justify-between"
+          aria-keyshortcuts="?"
+        >
+          <span>Keyboard shortcuts</span>
+          <kbd className="kbd" aria-hidden="true">?</kbd>
+        </button>
       </div>
     </nav>
   );

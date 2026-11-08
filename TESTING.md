@@ -21,6 +21,7 @@ no API key needed — these are pure-function tests and finish in about a second
 | `tests/plans.test.ts` | Plan lookup and fallback, ladder invariants (price/quota/effort/search-cap all increase), the floor of 3 web searches, quota period boundaries |
 | `tests/admin.test.ts` | That exactly one string grants admin (no near-miss value does), and that denial reports 404 rather than 403 |
 | `tests/pricing.test.ts` | Cost estimates (checked against a real measured search), usage accumulating across retries, and that every plan's model has a price |
+| `tests/shortcuts.test.ts` | Keyboard shortcuts never hijack browser combinations (⌘N, Ctrl+R…), ⌘K/Ctrl+K both work, and haptics are a silent no-op where unsupported |
 | `tests/admin-stats.test.ts` | The admin spend summary: today / week / month splits, the 14-day chart's day boundaries, failure cost, and the per-plan breakdown |
 
 Three of these guard bugs that were live in the first build, so they are worth
@@ -165,6 +166,18 @@ npm run db:setup && npm run dev
 - [ ] Your **own** role dropdown is disabled (you can't demote yourself)
 - [ ] Demote yourself from another admin account — `/admin` immediately returns
       to 404 for you, without waiting for the session cookie to expire
+
+### 12b. Shortcuts, haptics and branding
+- [ ] The browser tab shows the green V logo; sharing a link shows the logo card
+      (check `/opengraph-image`)
+- [ ] On the home page press `/` — the search box is focused; type "n" in it and
+      nothing else happens
+- [ ] `?` opens the shortcuts panel; `Esc` and clicking outside both close it
+- [ ] A "Try" chip fills the search box but does **not** start a search
+- [ ] On a comparison, `2` scrolls to the second seller and rings it briefly;
+      `T` opens and closes the side-by-side table
+- [ ] On an Android phone, searching gives a tap, results a double pulse, and
+      an error a heavier buzz (iPhones: nothing — expected)
 
 ### 13. Mobile (375px wide)
 - [ ] Sidebar is hidden; a menu button appears in the top bar

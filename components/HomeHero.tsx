@@ -3,6 +3,14 @@
 import { useState, useRef } from "react";
 import Reveal from "./Reveal";
 import ImgThumb from "./ImgThumb";
+import ExampleComparison from "./ExampleComparison";
+import { haptic } from "@/lib/haptics";
+
+/**
+ * Starting points for a first search. They fill the box rather than searching
+ * outright: every search is a paid AI call, and a mis-tap shouldn't spend one.
+ */
+const EXAMPLES = ["AirPods Pro 2", "PS5 Slim", "Dyson V15 Detect", "Kindle Paperwhite"];
 
 /** Named because we actually search these — not decorative trust badges. */
 const SELLERS = [
@@ -19,16 +27,19 @@ const SELLERS = [
 
 const HOW_IT_WORKS = [
   {
+    icon: "identify",
     step: "Step 1",
     title: "Name the product",
     body: "Type a model, or photograph the box. We identify the exact variant — size, capacity, colourway — before looking at a single price.",
   },
   {
+    icon: "market",
     step: "Step 2",
     title: "We read the market",
     body: "A live web search pulls current listings from three different sellers, with their real condition, shipping cost, delivery window and warranty terms.",
   },
   {
+    icon: "verdict",
     step: "Step 3",
     title: "We say which is worth it",
     body: "Each listing gets a value score out of ten and a stated reason. A cheap refurbished unit with a 90-day warranty does not beat a new one for the sake of being cheap.",
@@ -44,6 +55,7 @@ export default function HomeHero({
   const [imgFile, setImgFile] = useState<File | null>(null);
   const [voiceOn, setVoiceOn] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const recogRef = useRef<{ stop: () => void } | null>(null);
 
   const submit = (e?: React.FormEvent) => {
@@ -127,6 +139,10 @@ export default function HomeHero({
               {imgFile && <ImgThumb file={imgFile} onRemove={() => setImgFile(null)} />}
               <input
                 id="hero-search"
+                ref={inputRef}
+                data-search-input
+                enterKeyHint="search"
+                autoComplete="off"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={
@@ -180,11 +196,61 @@ export default function HomeHero({
               </button>
             </div>
 
-            <p className="eyebrow mt-4">
-              {imgFile ? "We'll identify the product from your photo" : `Searches ${SELLERS.length} sellers`}
-            </p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-3 mt-4">
+              <p className="eyebrow">
+                {imgFile ? "We'll identify the product from your photo" : `Searches ${SELLERS.length} sellers`}
+              </p>
+              {/* Keyboard hint: pointless on a phone, so desktop only. */}
+              <p className="hidden md:flex items-center gap-1.5 text-[12.5px]" style={{ color: "var(--ink-mute)" }}>
+                Press <kbd className="kbd">/</kbd> to search, <kbd className="kbd">?</kbd> for shortcuts
+              </p>
+            </div>
+
+            {!imgFile && (
+              <div className="flex flex-wrap items-center gap-2 mt-5">
+                <span className="text-[12.5px] mr-1" style={{ color: "var(--ink-mute)" }}>
+                  Try
+                </span>
+                {EXAMPLES.map((ex) => (
+                  <button
+                    key={ex}
+                    type="button"
+                    onClick={() => {
+                      haptic("tap");
+                      setQuery(ex);
+                      inputRef.current?.focus();
+                    }}
+                    className="chip"
+                  >
+                    {ex}
+                  </button>
+                ))}
+              </div>
+            )}
           </form>
         </Reveal>
+      </section>
+
+      {/* What a result looks like — the product's one idea, shown before anyone searches. */}
+      <section className="mt-20 md:mt-24 px-5 md:px-10 lg:px-16">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+          <Reveal className="lg:col-span-5 min-w-0">
+            <p className="eyebrow mb-4">What you get</p>
+            <h2
+              className="display mb-4"
+              style={{ fontSize: "clamp(1.7rem, 3vw, 2.4rem)", color: "var(--ink)", maxWidth: "16ch" }}
+            >
+              A verdict, not a list of prices.
+            </h2>
+            <p className="text-[15px] leading-relaxed max-w-prose" style={{ color: "var(--ink-soft)" }}>
+              Every listing gets a value score out of ten, and the pick comes with the
+              reason — so you can see exactly what the extra few dollars buy you.
+            </p>
+          </Reveal>
+          <Reveal delay={0.06} className="lg:col-span-7 min-w-0">
+            <ExampleComparison />
+          </Reveal>
+        </div>
       </section>
 
       {/* How it works — the reference's step rhythm: mono eyebrow, serif heading,
@@ -196,7 +262,10 @@ export default function HomeHero({
               <Reveal key={s.step} delay={0.05 * i}>
                 <div className="grid lg:grid-cols-12 gap-5 lg:gap-10">
                   <div className="lg:col-span-5">
-                    <p className="eyebrow mb-4">{s.step}</p>
+                    <div className="flex items-center gap-3 mb-4">
+                      <StepIcon kind={s.icon} />
+                      <p className="eyebrow">{s.step}</p>
+                    </div>
                     <h2
                       className="display"
                       style={{ fontSize: "clamp(1.7rem, 3vw, 2.4rem)", color: "var(--ink)" }}
@@ -238,6 +307,46 @@ export default function HomeHero({
 }
 
 /* Line icons rather than emoji — the design standards ban emoji as UI chrome. */
+
+/** One drawn icon per how-it-works step, in a tinted tile so the steps scan. */
+function StepIcon({ kind }: { kind: string }) {
+  const paths: Record<string, React.ReactNode> = {
+    // A price tag with a magnifier: finding the exact item.
+    identify: (
+      <>
+        <path d="M3.5 12.2V5a1.5 1.5 0 0 1 1.5-1.5h7.2L20 11.3l-7.7 7.7z" />
+        <circle cx="8" cy="8" r="1.4" />
+      </>
+    ),
+    // Three stacked rows: listings from several sellers.
+    market: (
+      <>
+        <rect x="3.5" y="4" width="17" height="4" rx="1.2" />
+        <rect x="3.5" y="10" width="17" height="4" rx="1.2" />
+        <rect x="3.5" y="16" width="11" height="4" rx="1.2" />
+      </>
+    ),
+    // A balance tipping to one side: the value judgement.
+    verdict: (
+      <>
+        <path d="M12 4v16M7 20h10M5 8h14" />
+        <path d="M5 8l-2.5 6a2.5 2.5 0 0 0 5 0z" />
+        <path d="M19 8l-2.5 5a2.5 2.5 0 0 0 5 0z" />
+      </>
+    ),
+  };
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-[10px]"
+      style={{ width: 36, height: 36, background: "var(--accent-wash)", color: "var(--accent)" }}
+      aria-hidden="true"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        {paths[kind]}
+      </svg>
+    </span>
+  );
+}
 
 function MicIcon() {
   return (

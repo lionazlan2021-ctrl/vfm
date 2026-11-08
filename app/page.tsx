@@ -9,8 +9,12 @@ import ResultsView from "@/components/ResultsView";
 import AuthModal from "@/components/AuthModal";
 import TopSearchBar from "@/components/TopSearchBar";
 import { ToastProvider, useToast } from "@/components/Toast";
+import ShortcutsDialog from "@/components/ShortcutsDialog";
+import { useShortcuts } from "@/lib/use-shortcuts";
+import { haptic } from "@/lib/haptics";
 import { apiFetch, apiSend, errorMessage, ApiRequestError } from "@/lib/api-client";
 import type { SearchResult, User, Listing, HistoryEntry, SavedEntry, Usage } from "@/types";
+import Logo from "@/components/Logo";
 
 type AppState = "home" | "loading" | "results" | "error";
 
@@ -30,6 +34,7 @@ function VFMApp() {
   const [authChecked, setAuthChecked] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
   const { push } = useToast();
 
@@ -108,6 +113,7 @@ function VFMApp() {
       if (!label) return;
 
       setMobileNavOpen(false);
+      haptic("tap");
       setState("loading");
       setQuery(label);
       setResults(null);
@@ -145,6 +151,7 @@ function VFMApp() {
 
         setResults(data);
         setState("results");
+        haptic("success");
         // Re-read history from the server so the sidebar shows the real row id,
         // which is what makes a past search reopenable without paying again.
         // Usage is re-read too, since this search just consumed one.
@@ -155,6 +162,7 @@ function VFMApp() {
         scrollToTop();
       } catch (e) {
         if (e instanceof ApiRequestError && e.status === 401) setShowAuth(true);
+        haptic("error");
         setError(errorMessage(e, "Search failed. Please try again."));
         setState("error");
       }
@@ -218,6 +226,7 @@ function VFMApp() {
   const toggleSave = useCallback(
     async (id: string, listing: Listing) => {
       if (!user) return requireLogin("Log in to save products");
+      haptic("tap");
 
       const existing = saved.find((s) => entryKey(s.query, s.listing.store) === id);
       try {
@@ -250,6 +259,7 @@ function VFMApp() {
   const toggleTrack = useCallback(
     async (id: string, listing: Listing) => {
       if (!user) return requireLogin("Log in to track prices");
+      haptic("tap");
 
       const existing = tracked.find((t) => entryKey(t.query, t.listing.store) === id);
       try {
@@ -316,6 +326,36 @@ function VFMApp() {
     push("Logged out");
   }, [push, reset]);
 
+  /**
+   * Focuses whichever search box is on screen. From a loading or error screen
+   * there is none, so it goes home first and focuses once the hero renders.
+   */
+  const focusSearch = useCallback(() => {
+    const input = document.querySelector<HTMLInputElement>("[data-search-input]");
+    if (input) {
+      input.focus();
+      input.select();
+      return;
+    }
+    reset();
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => document.querySelector<HTMLInputElement>("[data-search-input]")?.focus())
+    );
+  }, [reset]);
+
+  // The modal states own the keyboard while they're open.
+  const anyModalOpen = showAuth || showShortcuts;
+  useShortcuts(
+    [
+      { key: "k", mod: true, handler: (e) => { e.preventDefault(); focusSearch(); } },
+      { key: "/", handler: (e) => { e.preventDefault(); focusSearch(); } },
+      { key: "n", handler: () => { reset(); focusSearch(); } },
+      { key: "?", handler: () => setShowShortcuts(true) },
+      { key: "Escape", allowInInput: true, handler: () => setMobileNavOpen(false) },
+    ],
+    !anyModalOpen
+  );
+
   return (
     <div className="flex min-h-screen" style={{ background: "var(--paper)" }}>
       {/* Dimmer behind the mobile drawer. */}
@@ -341,6 +381,7 @@ function VFMApp() {
         onShowAuth={() => setShowAuth(true)}
         onLogout={handleLogout}
         onRemoveSaved={removeSaved}
+        onShowShortcuts={() => setShowShortcuts(true)}
         mobileOpen={mobileNavOpen}
         onCloseMobile={() => setMobileNavOpen(false)}
       />
@@ -366,9 +407,7 @@ function VFMApp() {
               <path d="M4 7h16M4 12h16M4 17h16" />
             </svg>
           </button>
-          <span className="display text-[17px]" style={{ color: "var(--ink)" }}>
-            VFM<span style={{ color: "var(--accent)" }}>.</span>
-          </span>
+          <Logo size={17} />
         </div>
 
         {state === "results" && (
@@ -407,6 +446,7 @@ function VFMApp() {
       </div>
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuth={handleAuth} />}
+      <ShortcutsDialog open={showShortcuts} onClose={() => setShowShortcuts(false)} />
     </div>
   );
 }

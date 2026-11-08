@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { PLANS, PLAN_ORDER, formatPrice, getPlan } from "@/lib/plans";
 import { getCurrentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import Logo from "@/components/Logo";
 
 export const metadata: Metadata = {
   title: "Plans and pricing — VFM",
@@ -30,8 +31,8 @@ export default async function PricingPage() {
         className="px-5 md:px-10 lg:px-16 py-5 flex items-center justify-between"
         style={{ borderBottom: "1px solid var(--rule)" }}
       >
-        <Link href="/" className="display text-[20px]" style={{ color: "var(--ink)" }}>
-          VFM<span style={{ color: "var(--accent)" }}>.</span>
+        <Link href="/" aria-label="VFM home">
+          <Logo size={20} />
         </Link>
         <Link href="/" className="btn-quiet" style={{ padding: "8px 14px" }}>
           Back to search

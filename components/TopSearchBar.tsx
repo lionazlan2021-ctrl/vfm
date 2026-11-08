@@ -25,6 +25,7 @@ export default function TopSearchBar({
       </label>
       <input
         id={id}
+        data-search-input
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Compare another product…"

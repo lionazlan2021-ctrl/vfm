@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch, errorMessage } from "@/lib/api-client";
+import Logo from "@/components/Logo";
 
 /**
  * Shown at /admin to anyone who isn't an admin.
@@ -66,8 +67,8 @@ export default function AdminSignIn({
   return (
     <main className="min-h-screen flex items-center justify-center px-5 py-16">
       <div className="w-full max-w-[400px]">
-        <Link href="/" className="display text-[22px] inline-block mb-8" style={{ color: "var(--ink)" }}>
-          VFM<span style={{ color: "var(--accent)" }}>.</span>
+        <Link href="/" aria-label="VFM home" className="inline-block mb-8">
+          <Logo size={22} />
         </Link>
 
         <p className="eyebrow mb-2">Admin</p>

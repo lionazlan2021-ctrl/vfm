@@ -197,6 +197,22 @@ prices, **Inter Tight** for body and UI, **JetBrains Mono** for eyebrow labels,
 data and scores. All tokens live in `app/globals.css` and are mirrored into
 `tailwind.config.js` — edit the CSS, not the Tailwind file.
 
+**Logo.** The mark is a V whose right arm rises past the left, so it reads as
+both "V" and a tick — value, verified — with a dot echoing the green full stop
+in "VFM.". Its heavy-left, light-right strokes follow Fraunces. It lives in
+`components/Logo.tsx` (used in every header), `app/icon.svg` (favicon),
+`app/apple-icon.tsx` (iOS home screen), `app/opengraph-image.tsx` (link
+previews), and `public/brand/` (standalone SVGs for use elsewhere). Change one,
+change all.
+
+**Keyboard shortcuts and haptics.** `/` or ⌘K jumps to search, `N` starts a new
+search, `?` lists every shortcut, and on a comparison `1`–`5` jump to a seller
+and `T` toggles the table (`lib/use-shortcuts.ts`, `components/ShortcutsDialog.tsx`).
+Letter shortcuts never fire while typing in a field. On Android phones, short
+vibrations confirm a search, results arriving, an error, and save/track
+(`lib/haptics.ts`); iOS Safari has no vibration API, so there it does nothing,
+and it's skipped for anyone who asks for reduced motion.
+
 Deliberate constraints, from the project's design standards: no emoji as UI
 chrome, no gradient-filled headline words, no glassmorphism, no badge clutter,
 no centred-everything layout. Motion is one orchestrated reveal

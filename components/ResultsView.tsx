@@ -6,6 +6,7 @@ import SellerCard from "./SellerCard";
 import CompTable from "./CompTable";
 import FollowUpChat from "./FollowUpChat";
 import type { SearchResult, Listing } from "@/types";
+import { useShortcuts } from "@/lib/use-shortcuts";
 
 function prefersReducedMotion() {
   return (
@@ -82,6 +83,28 @@ export default function ResultsView({
     data.recommendation <= listings.length
       ? data.recommendation - 1
       : 0;
+
+  /** Scrolls a seller card into view and rings it briefly, so the jump is visible. */
+  const jumpTo = (n: number) => {
+    const el = document.getElementById(`listing-${n}`);
+    if (!el) return;
+    const smooth = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
+    el.classList.remove("flash-target");
+    // Reflow so re-adding the class restarts the animation on a repeat press.
+    void el.offsetWidth;
+    el.classList.add("flash-target");
+    el.querySelector<HTMLElement>("a, button")?.focus({ preventScroll: true });
+  };
+
+  // Called before the advice early-return below: hooks must run on every render.
+  useShortcuts(
+    [
+      ...[1, 2, 3, 4, 5].map((n) => ({ key: String(n), handler: () => jumpTo(n) })),
+      { key: "t", handler: () => setShowTable((t) => !t) },
+    ],
+    data.mode !== "advice" && listings.length > 0
+  );
 
   /**
    * The query was a question, not a product. Rendered as prose rather than
@@ -174,15 +197,17 @@ export default function ResultsView({
         {listings.map((l, i) => {
           const id = `${query}::${l.store}`;
           return (
-            <SellerCard
-              key={`${l.store}-${i}`}
-              listing={l}
-              isRecommended={i === recommendedIndex}
-              isSaved={savedIds.has(id)}
-              onSave={() => onToggleSave(id, l)}
-              isTracked={trackedIds.has(id)}
-              onTrack={() => onToggleTrack(id, l)}
-            />
+            // The wrapper is the number-key jump target (see the shortcuts above).
+            <div key={`${l.store}-${i}`} id={`listing-${i + 1}`} className="scroll-target rounded-[18px]">
+              <SellerCard
+                listing={l}
+                isRecommended={i === recommendedIndex}
+                isSaved={savedIds.has(id)}
+                onSave={() => onToggleSave(id, l)}
+                isTracked={trackedIds.has(id)}
+                onTrack={() => onToggleTrack(id, l)}
+              />
+            </div>
           );
         })}
       </div>

@@ -4,6 +4,7 @@ import { getAdminUser } from "@/lib/admin";
 import { getCurrentSession } from "@/lib/auth";
 import { isGoogleConfigured } from "@/lib/google-oauth";
 import AdminSignIn from "@/components/admin/AdminSignIn";
+import Logo from "@/components/Logo";
 
 export const metadata: Metadata = {
   title: "Admin — VFM",
@@ -37,8 +38,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         style={{ borderBottom: "1px solid var(--rule)" }}
       >
         <div className="flex items-baseline gap-4">
-          <Link href="/" className="display text-[20px]" style={{ color: "var(--ink)" }}>
-            VFM<span style={{ color: "var(--accent)" }}>.</span>
+          <Link href="/" aria-label="VFM home">
+            <Logo size={20} />
           </Link>
           <span className="eyebrow" style={{ color: "var(--ink-mute)" }}>
             Admin

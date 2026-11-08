@@ -39,9 +39,9 @@ export async function GET(req: NextRequest) {
         }
       : {};
 
-    const [total, users] = await Promise.all([
-      prisma.user.count({ where }),
-      prisma.user.findMany({
+    // Sequential: production runs with connection_limit=1 (see lib/admin-stats).
+    const total = await prisma.user.count({ where });
+    const users = await prisma.user.findMany({
         where,
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * PAGE_SIZE,
@@ -57,8 +57,7 @@ export async function GET(req: NextRequest) {
           passwordHash: true,
           _count: { select: { searches: true, saved: true, tracked: true } },
         },
-      }),
-    ]);
+      });
 
     // This month's searches per user, for the quota column. One grouped query
     // rather than a count per row.
@@ -71,6 +70,22 @@ export async function GET(req: NextRequest) {
         })
       : [];
     const monthlyByUser = new Map(monthly.map((m) => [m.userId, m._count._all]));
+
+    // What each account's AI requests cost this month. Optional: if the AiCall
+    // table isn't there yet, the column just shows nothing.
+    let spendByUser = new Map<string, number>();
+    if (ids.length) {
+      try {
+        const spend = await prisma.aiCall.groupBy({
+          by: ["userId"],
+          where: { userId: { in: ids }, createdAt: { gte: currentPeriodStart() } },
+          _sum: { costUsd: true },
+        });
+        spendByUser = new Map(spend.map((s) => [s.userId ?? "", s._sum.costUsd ?? 0]));
+      } catch (err) {
+        console.error("[admin] could not load per-user AI spend:", err);
+      }
+    }
 
     return NextResponse.json({
       total,
@@ -94,6 +109,7 @@ export async function GET(req: NextRequest) {
         hasGoogle: u.googleId !== null,
         searchesTotal: u._count.searches,
         searchesThisMonth: monthlyByUser.get(u.id) ?? 0,
+        aiSpendThisMonth: spendByUser.get(u.id) ?? 0,
         saved: u._count.saved,
         tracked: u._count.tracked,
       })),

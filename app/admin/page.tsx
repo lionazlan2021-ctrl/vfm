@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { getAdminUser, configuredAdminEmails } from "@/lib/admin";
+import { getAdminUser, configuredAdminEmails, isAdminIdentity } from "@/lib/admin";
 import { PLANS, PLAN_ORDER } from "@/lib/plans";
 import {
   getAiActivity,
@@ -40,6 +40,11 @@ export default async function AdminOverviewPage() {
   const activity = await getAiActivity();
   const { users, searchesTotal, searchesMonth, searches24h, saved, tracked, plans: planCounts } =
     await getSiteCounts();
+  const newestUsers = await prisma.user.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 8,
+    select: { id: true, name: true, email: true, plan: true, role: true, createdAt: true },
+  });
 
   const checks = healthChecks(activity, dbLatencyMs);
 
@@ -83,6 +88,65 @@ export default async function AdminOverviewPage() {
           </ul>
         </div>
         <AiHealthCheck />
+      </section>
+
+      {/* ----------------------------------------------------------- Users */}
+      <section className="mb-14" aria-labelledby="users-heading">
+        <div className="flex items-baseline justify-between mb-4 gap-4">
+          <h2 id="users-heading" className="eyebrow">
+            Users &middot; {users.toLocaleString()} account{users === 1 ? "" : "s"}
+          </h2>
+          <Link href="/admin/users" className="text-[13px]" style={{ color: "var(--accent)" }}>
+            See all and manage
+          </Link>
+        </div>
+        {newestUsers.length === 0 ? (
+          <div className="panel p-8 text-center">
+            <p className="text-[14px]" style={{ color: "var(--ink-mute)" }}>
+              No accounts yet.
+            </p>
+          </div>
+        ) : (
+          <div className="card overflow-hidden">
+            <div style={{ overflowX: "auto" }}>
+              <table className="w-full" style={{ borderCollapse: "collapse", minWidth: "560px" }}>
+                <caption className="sr-only">Newest accounts</caption>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid var(--rule)" }}>
+                    <Th>Newest accounts</Th>
+                    <Th>Plan</Th>
+                    <Th>Role</Th>
+                    <Th align="right">Joined</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {newestUsers.map((u) => (
+                    <tr key={u.id} style={{ borderBottom: "1px solid var(--rule)" }}>
+                      <Td>
+                        {u.name}
+                        <br />
+                        <span className="text-[12.5px]" style={{ color: "var(--ink-mute)" }}>
+                          {u.email}
+                        </span>
+                      </Td>
+                      <Td muted>{planLabel(u.plan).replace(" accounts", "")}</Td>
+                      <Td muted={!isAdminIdentity(u)}>
+                        {isAdminIdentity(u) ? (
+                          <span style={{ color: "var(--accent-deep)" }}>Admin</span>
+                        ) : (
+                          "User"
+                        )}
+                      </Td>
+                      <Td align="right" muted mono>
+                        {formatDate(u.createdAt)}
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* -------------------------------------------------------- AI spend */}

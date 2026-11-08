@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch, apiSend, errorMessage } from "@/lib/api-client";
 import { PLAN_ORDER, PLANS } from "@/lib/plans";
+import { formatUsd } from "@/lib/pricing";
 
 type AdminUserRow = {
   id: string;
@@ -17,6 +18,8 @@ type AdminUserRow = {
   hasGoogle: boolean;
   searchesTotal: number;
   searchesThisMonth: number;
+  /** Estimated cost of this account's AI requests this month, in USD. */
+  aiSpendThisMonth: number;
   saved: number;
   tracked: number;
 };
@@ -143,13 +146,14 @@ export default function UsersTable({ currentAdminId }: { currentAdminId: string 
       ) : (
         <div className="card overflow-hidden">
           <div style={{ overflowX: "auto" }}>
-            <table className="w-full" style={{ borderCollapse: "collapse", minWidth: "860px" }}>
+            <table className="w-full" style={{ borderCollapse: "collapse", minWidth: "960px" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--rule)" }}>
                   <Th>Account</Th>
                   <Th>Sign-in</Th>
                   <Th align="right">This month</Th>
                   <Th align="right">Total</Th>
+                  <Th align="right">AI cost (month)</Th>
                   <Th>Plan</Th>
                   <Th>Role</Th>
                   <Th align="right">Joined</Th>
@@ -181,6 +185,9 @@ export default function UsersTable({ currentAdminId }: { currentAdminId: string 
                       </Td>
                       <Td align="right" mono muted>
                         {u.searchesTotal}
+                      </Td>
+                      <Td align="right" mono muted={u.aiSpendThisMonth === 0}>
+                        {formatUsd(u.aiSpendThisMonth)}
                       </Td>
 
                       <Td>

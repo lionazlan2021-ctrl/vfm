@@ -7,6 +7,7 @@ import { apiError, handle, readJson } from "@/lib/http";
 import { callerKey, hit, LIMITS, rateLimitHeaders } from "@/lib/rate-limit";
 import { getPlan } from "@/lib/plans";
 import { getUsage, formatResetDate } from "@/lib/usage";
+import { startAiCall } from "@/lib/ai-log";
 
 /**
  * Roughly 3.4 MB of original image once base64 is decoded. Anthropic accepts up
@@ -88,16 +89,34 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const result = await searchProducts({
-      query,
-      imageBase64: body.imageBase64,
-      imageMediaType: body.imageMediaType as never,
+    // Logged whether it works or not, signed in or not: failed and anonymous
+    // searches are paid for too, and are otherwise invisible to the owner.
+    const call = startAiCall({
+      kind: "search",
+      userId: session?.userId,
+      plan: session ? plan.id : "anonymous",
       model: plan.model,
-      effort: plan.searchEffort,
-      maxSearches: plan.maxSearches,
-      sellers: plan.sellersCompared,
-      maxTokens: plan.maxTokens,
+      query: query || (body.imageBase64 ? "Image search" : undefined),
     });
+
+    let result: Awaited<ReturnType<typeof searchProducts>>;
+    try {
+      result = await searchProducts({
+        query,
+        imageBase64: body.imageBase64,
+        imageMediaType: body.imageMediaType as never,
+        model: plan.model,
+        effort: plan.searchEffort,
+        maxSearches: plan.maxSearches,
+        sellers: plan.sellersCompared,
+        maxTokens: plan.maxTokens,
+        meter: call.usage,
+      });
+    } catch (err) {
+      await call.failed(err);
+      throw err;
+    }
+    await call.succeeded();
 
     // Record the search for signed-in users. A history write must never sink an
     // otherwise-good result the user already paid for.

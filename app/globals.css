@@ -35,6 +35,11 @@
   --flag: #9a6510;
   --flag-wash: #f6ecdb;
 
+  /* Admin status only: something is broken and needs the owner. Kept out of
+     the shopper-facing UI so green and amber keep their value meanings. */
+  --alert: #a3392b;
+  --alert-wash: #f6e3df;
+
   --radius-card: 18px;
   --radius-panel: 26px;
 }

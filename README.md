@@ -14,7 +14,8 @@ sticker price.
 - **Image upload** — real product identification via Claude's vision capability.
 - **Follow-up chat** — grounded in the listing data from the original search; says when something is outside that data instead of guessing.
 - **Authentication** — email/password signup and login with hashed passwords (bcrypt) and signed session cookies (JWT via `jose`), plus optional **Google sign-in** (`lib/google-oauth.ts`) implemented directly against Google's OAuth 2.0 endpoints so there's only one session system.
-- **Admin panel** — `/admin`, guarded by a database-backed role. Account and search stats, plus inline plan/role editing (`lib/admin.ts`).
+- **Admin panel** — `/admin`, guarded by a database-backed role. Health checks (including a live "is the AI key working and funded" test), estimated AI spend by day and by plan, the latest AI requests with failure reasons, account stats, and inline plan/role editing (`lib/admin.ts`, `lib/admin-stats.ts`).
+- **AI cost log** — every paid AI request is recorded in the `AiCall` table with its token usage and estimated cost, whether the caller was signed in or not and whether it worked (`lib/ai-log.ts`, prices in `lib/pricing.ts`). Saved search history only covers signed-in users' successes, so on its own it can't explain the bill.
 - **Database** — Prisma schema for users, search history, saved products, and price tracking.
 - **Search history** — past results are stored and **replayed from the database**, so reopening one costs nothing.
 - **Rate limiting** — the paid endpoints are metered per user and per IP (`lib/rate-limit.ts`).
@@ -219,6 +220,7 @@ app/
     tracked/route.ts        — GET/POST/DELETE: price tracking
     history/route.ts        — GET: search history list
     history/[id]/route.ts   — GET/DELETE: replay or remove one stored result
+    admin/stats|users|health — admin-only: counts, user management, live AI check
 components/                 — all UI components (cards, chat, sidebar, etc.)
 lib/
   ai.ts                     — Anthropic integration, prompts, response schema
@@ -228,6 +230,9 @@ lib/
   auth.ts                   — password hashing + JWT sessions
   http.ts / errors.ts       — shared API error shape and request validation
   rate-limit.ts             — per-user / per-IP limits
+  pricing.ts                — model prices and per-request cost estimates
+  ai-log.ts                 — records every paid AI call for the admin panel
+  admin-stats.ts            — spend summaries and counts for the admin panel
   listing-collection.ts     — shared implementation for saved + tracked
   api-client.ts             — browser fetch wrapper
   prisma.ts                 — Prisma client singleton
@@ -255,11 +260,11 @@ server log.
 
 ## Notes on scope
 
-This is a complete, working application — not a demo. Some items from a larger
-spec (OAuth social login, SMS/OTP verification, Stripe/PayPal/Klarna live
-payment processing, an admin panel) are **not included** in this build. Adding
-real billing or third-party OAuth requires creating accounts with those
-providers and is a meaningful follow-up project, not a config flag. The payment
+This is a complete, working application — not a demo. Google sign-in and an
+admin panel are included. Some items from a larger spec (other social logins,
+SMS/OTP verification, Stripe/PayPal/Klarna live payment processing) are **not
+included** in this build. Adding real billing requires creating accounts with
+those providers and is a meaningful follow-up project, not a config flag. The payment
 plan calculator included here shows realistic installment math but does not
 process real transactions.
 

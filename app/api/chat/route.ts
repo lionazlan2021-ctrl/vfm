@@ -6,6 +6,7 @@ import { getPlan } from "@/lib/plans";
 import { getCurrentSession } from "@/lib/auth";
 import { apiError, handle, readJson } from "@/lib/http";
 import { callerKey, hit, LIMITS, rateLimitHeaders } from "@/lib/rate-limit";
+import { startAiCall } from "@/lib/ai-log";
 
 /**
  * Follow-up chat is a paid Anthropic call, so it requires a session. Previously
@@ -58,13 +59,29 @@ export async function POST(req: NextRequest) {
 
     const body = await readJson(req, ChatSchema, { maxBytes: 128 * 1024 });
 
-    const reply = await askFollowUp({
-      history: body.history ?? [],
-      originalQuery: body.originalQuery ?? "",
-      productContext: body.productContext,
-      userMessage: body.userMessage,
+    const call = startAiCall({
+      kind: "chat",
+      userId: session.userId,
+      plan: plan.id,
       model: plan.model,
+      query: body.userMessage,
     });
+
+    let reply: string;
+    try {
+      reply = await askFollowUp({
+        history: body.history ?? [],
+        originalQuery: body.originalQuery ?? "",
+        productContext: body.productContext,
+        userMessage: body.userMessage,
+        model: plan.model,
+        meter: call.usage,
+      });
+    } catch (err) {
+      await call.failed(err);
+      throw err;
+    }
+    await call.succeeded();
 
     return NextResponse.json({ reply }, { headers: rateLimitHeaders(rl) });
   });

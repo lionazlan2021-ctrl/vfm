@@ -1,10 +1,12 @@
-import { requireAdmin } from "@/lib/admin";
+import { getAdminUser } from "@/lib/admin";
 import UsersTable from "@/components/admin/UsersTable";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminUsersPage() {
-  const admin = await requireAdmin();
+  // The layout shows the sign-in form to non-admins.
+  const admin = await getAdminUser();
+  if (!admin) return null;
 
   return (
     <main className="px-5 md:px-10 lg:px-14 py-10 md:py-14">

@@ -302,9 +302,31 @@ above keeps working.
 
 ## The admin panel
 
-There's an admin area at `/admin`. It shows how many accounts and searches you
-have, and lets you change anyone's plan or make someone else an admin — without
-touching the terminal.
+There's an admin area at `/admin`. It shows whether the site is healthy, what
+the AI is costing you, and how many accounts and searches you have — and lets
+you change anyone's plan or make someone else an admin, without touching the
+terminal.
+
+The **Overview** page, top to bottom:
+
+- **Health** — whether the AI key, database, login sessions and Google sign-in
+  are set up, and whether the most recent AI requests worked. If your Anthropic
+  credits run out, this is where it says so in plain words. The **Test AI
+  connection** button sends one tiny request (a tiny fraction of a cent) to
+  check right now.
+- **AI spend** — estimated cost today, this week and this month, a 14-day
+  chart, and a split by who made the requests: visitors who aren't logged in,
+  and each plan. Every search and chat is counted, including failed ones and
+  ones by people who aren't logged in. These are estimates from Anthropic's
+  published prices; console.anthropic.com has the exact bill.
+- **Latest AI requests** — the last 15 searches and chats: who, what, cost, and
+  whether it worked (with the reason, if it didn't).
+- **Accounts** — totals and the split by plan.
+
+> **After updating the site, run `npm run db:deploy` once** from your computer.
+> The spend figures live in a database table that has to be created; until it
+> is, the Overview says "Spend tracking isn't set up" and searches carry on
+> working — they just aren't counted. `npm run dev` does this for you too.
 
 **Nobody is an admin by default**, including you. There is no "become an admin"
 button anywhere on the site, on purpose: if there were, anyone could press it.
@@ -358,9 +380,12 @@ privately and suggest they keep it somewhere safe.
 
 ### Things worth knowing
 
-- **Non-admins don't see a locked door.** Visiting `/admin` without permission
-  shows the normal 404 page, not "access denied". Someone poking around
-  shouldn't be told there's an admin panel to break into.
+- **`/admin` has its own sign-in form.** Go straight to `yoursite.com/admin`
+  and log in with your normal email and password — no need to log in on the
+  main site first. Signing in there does **not** make anyone an admin: an
+  account that isn't one sees "This account isn't an admin" and nothing else.
+  The admin data behind the page (`/api/admin/...`) still answers "not found"
+  to anyone who isn't an admin.
 - **You can't remove your own admin access** from the panel. If you were the
   only admin, that would lock everyone out permanently. Use the command above
   from another account if you really mean it.

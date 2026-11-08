@@ -58,6 +58,57 @@ model User {
   searches Search[]
   saved    SavedProduct[]
   tracked  TrackedProduct[]
+  aiCalls  AiCall[]
+}
+
+/// One paid AI request — a product search or a follow-up chat — whether it
+/// succeeded or not, and whether the caller was signed in or not.
+///
+/// `Search` only holds signed-in users' successful results (it backs their
+/// history), so it can't explain the Anthropic bill: visitors' searches and
+/// failed attempts are paid for too and appear nowhere else. This table is the
+/// admin panel's source for spend and failures.
+model AiCall {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  /// "search" | "chat"
+  kind String
+
+  /// Null for visitors who aren't signed in, and kept (as null) if the account
+  /// is later deleted, so past spend still adds up.
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  /// The plan the request ran on: "anonymous" | "free" | "pro" | "premium".
+  plan  String
+  model String
+
+  /// What was searched or asked, trimmed. Shown to admins only.
+  query String?
+
+  inputTokens      Int @default(0)
+  outputTokens     Int @default(0)
+  cacheReadTokens  Int @default(0)
+  cacheWriteTokens Int @default(0)
+  webSearches      Int @default(0)
+  /// Round trips to Anthropic: retries and paused web-search loops add more.
+  apiCalls         Int @default(0)
+
+  /// Estimated from published prices (lib/pricing.ts). Anthropic's own console
+  /// is the source of truth for what was actually billed.
+  costUsd Float @default(0)
+
+  ok          Boolean
+  /// The user-facing error code, for failures.
+  errorCode   String?
+  /// The underlying cause, for admins ("credit balance is too low"). Never sent
+  /// to the person who searched.
+  errorDetail String?
+  durationMs  Int     @default(0)
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
 }
 
 model Search {

@@ -20,6 +20,8 @@ no API key needed — these are pure-function tests and finish in about a second
 | `tests/rate-limit.test.ts` | Limit enforcement, per-key isolation, window reset, caller identification, response headers |
 | `tests/plans.test.ts` | Plan lookup and fallback, ladder invariants (price/quota/effort/search-cap all increase), the floor of 3 web searches, quota period boundaries |
 | `tests/admin.test.ts` | That exactly one string grants admin (no near-miss value does), and that denial reports 404 rather than 403 |
+| `tests/pricing.test.ts` | Cost estimates (checked against a real measured search), usage accumulating across retries, and that every plan's model has a price |
+| `tests/admin-stats.test.ts` | The admin spend summary: today / week / month splits, the 14-day chart's day boundaries, failure cost, and the per-plan breakdown |
 
 Three of these guard bugs that were live in the first build, so they are worth
 keeping rather than deleting if they ever start failing:
@@ -137,14 +139,26 @@ npm run db:setup && npm run dev
       redirected back with `invalid_state`, not signed in
 
 ### 12. Admin panel
-- [ ] Logged out, `/admin` shows the **404 page** — not a login prompt, not
-      "forbidden" (it must not confirm the panel exists)
-- [ ] Logged in as a normal user, `/admin` still shows 404
+- [ ] Logged out, `/admin` shows the **admin sign-in form**
+- [ ] Signing in there with a normal (non-admin) account shows "This account
+      isn't an admin" with a Sign out button — and no admin data
+- [ ] Signing in there with an admin account shows the Overview straight away
+- [ ] A wrong password shows "Incorrect email or password." under the form
 - [ ] `curl` `/api/admin/users` while logged out → `{"code":"not_found"}`, 404
 - [ ] Promote yourself: `npm run role:set -- you@email.com admin`
 - [ ] Reload — an **Admin** link appears in the sidebar, and `/admin` now loads
       **without logging out and back in**
 - [ ] Overview shows account and search counts that match reality
+- [ ] Health lists the AI key, database, login sessions, Google sign-in and
+      admin access; anything missing is red with a plain explanation
+- [ ] **Test AI connection** reports "Working" — or, with credits exhausted,
+      "Out of API credits", not a generic error
+- [ ] Run a search while logged out, then reload: it appears under **Latest AI
+      requests** as "Visitor", and the spend figures go up by a few cents
+- [ ] A failed search (e.g. with credits exhausted) appears as **Failed** with
+      its reason, and counts towards "spent on failures"
+- [ ] With the `AiCall` table missing (before `npm run db:deploy`), the
+      Overview still loads and says spend tracking isn't set up
 - [ ] Users page lists accounts; the search box filters by name and email
 - [ ] Change someone's plan in the table — their sidebar quota reflects the new
       limit on their next page load

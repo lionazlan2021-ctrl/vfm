@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getAdminUser } from "@/lib/admin";
+import { getCurrentSession } from "@/lib/auth";
+import { isGoogleConfigured } from "@/lib/google-oauth";
+import AdminSignIn from "@/components/admin/AdminSignIn";
 
 export const metadata: Metadata = {
   title: "Admin — VFM",
@@ -13,14 +15,20 @@ export const dynamic = "force-dynamic";
 /**
  * Guards every page under /admin.
  *
- * Non-admins get the 404 page, not a "forbidden" message — the existence of an
- * admin area isn't something a signed-in stranger needs confirmed. The API
- * routes do the same check independently; this layout only controls what
- * renders, and would be worthless on its own.
+ * Anyone who isn't an admin gets a sign-in form, so the owner can log in here
+ * directly instead of via the main site. (This used to be a 404, which hid the
+ * panel's existence but left the owner with no way in from this URL.) Signing
+ * in never grants admin; only admin accounts get past it.
+ *
+ * The API routes and each page do the same check independently — Next renders
+ * pages alongside their layout, so this layout alone would protect nothing.
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const admin = await getAdminUser();
-  if (!admin) notFound();
+  if (!admin) {
+    const session = await getCurrentSession();
+    return <AdminSignIn signedInAs={session?.email ?? null} googleEnabled={isGoogleConfigured()} />;
+  }
 
   return (
     <div className="min-h-screen">

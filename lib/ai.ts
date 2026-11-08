@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { ApiError } from "./errors";
 import { mockSearch } from "./mock-search";
+import { addUsage, type AiUsage } from "./pricing";
 
 /**
  * Default model, used when no plan is supplied (and by the follow-up chat).
@@ -450,13 +451,17 @@ function textOf(content: Anthropic.ContentBlock[]): string {
  */
 async function runToCompletion(
   client: Anthropic,
-  params: Anthropic.MessageCreateParamsNonStreaming
+  params: Anthropic.MessageCreateParamsNonStreaming,
+  meter?: AiUsage
 ): Promise<string> {
   const messages = [...params.messages];
   let collected = "";
 
   for (let i = 0; i <= MAX_CONTINUATIONS; i++) {
     const response = await client.messages.create({ ...params, messages });
+    // Metered before anything can throw: a refusal or an unusable answer is
+    // still billed, and the admin panel's spend figures must include it.
+    if (meter) addUsage(meter, response.usage);
 
     if (response.stop_reason === "refusal") {
       throw new ApiError(
@@ -494,17 +499,57 @@ function translateSdkError(err: unknown, routeLabel: string): never {
 
   if (err instanceof Anthropic.APIError) {
     console.error(`[${routeLabel}] Anthropic API error ${err.status}:`, err.message);
+    const internal = describeAnthropicError(err);
     if (err.status === 401 || err.status === 403) {
-      throw new ApiError("ai_misconfigured", "The AI service rejected our credentials. Check ANTHROPIC_API_KEY.");
+      throw new ApiError(
+        "ai_misconfigured",
+        "The AI service rejected our credentials. Check ANTHROPIC_API_KEY.",
+        undefined,
+        internal
+      );
     }
     if (err.status === 429) {
-      throw new ApiError("ai_unavailable", "The AI service is busy right now. Please try again in a moment.");
+      throw new ApiError(
+        "ai_unavailable",
+        "The AI service is busy right now. Please try again in a moment.",
+        undefined,
+        internal
+      );
     }
-    throw new ApiError("ai_unavailable", "The AI service is temporarily unavailable. Please try again.");
+    throw new ApiError(
+      "ai_unavailable",
+      "The AI service is temporarily unavailable. Please try again.",
+      undefined,
+      internal
+    );
   }
 
   console.error(`[${routeLabel}] unexpected AI error:`, err);
-  throw new ApiError("ai_unavailable", "Couldn't reach the AI service. Please try again.");
+  throw new ApiError(
+    "ai_unavailable",
+    "Couldn't reach the AI service. Please try again.",
+    undefined,
+    err instanceof Error ? err.message.slice(0, 300) : undefined
+  );
+}
+
+/**
+ * A short, admin-facing account of an Anthropic error.
+ *
+ * Running out of credits arrives as a plain 400 with no dedicated error type,
+ * so it is recognised by its message. It's singled out because it is the one
+ * failure the owner can fix in a minute, and the generic "temporarily
+ * unavailable" shown to shoppers gives no hint of it.
+ */
+export function describeAnthropicError(err: { status?: number; message: string }): string {
+  if (/credit balance is too low/i.test(err.message)) {
+    return "Out of API credits — add funds at console.anthropic.com (Settings → Billing).";
+  }
+  if (err.status === 401) return "API key rejected — check ANTHROPIC_API_KEY.";
+  if (err.status === 403) return "API key lacks permission for this model or feature.";
+  if (err.status === 429) return "Rate limited by Anthropic.";
+  if (err.status && err.status >= 500) return `Anthropic server error (${err.status}).`;
+  return `Anthropic ${err.status ?? "error"}: ${err.message.slice(0, 200)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -527,6 +572,11 @@ export type SearchParams = {
   sellers?: number;
   /** Ceiling on the response, sized to the seller count. */
   maxTokens?: number;
+  /**
+   * Filled with token and web-search usage as the request runs — including on
+   * failure, so a search that errors after spending money is still counted.
+   */
+  meter?: AiUsage;
 };
 
 /** Live product search — Claude with the web-search tool enabled. */
@@ -539,6 +589,7 @@ export async function searchProducts({
   maxSearches = 3,
   sellers = 3,
   maxTokens = 3500,
+  meter,
 }: SearchParams): Promise<ParsedSearchResult> {
   if (isMockMode()) return mockSearch(query, Boolean(imageBase64));
 
@@ -577,10 +628,14 @@ export async function searchProducts({
 
   let raw: string;
   try {
-    raw = await runToCompletion(client, {
-      ...baseParams,
-      messages: [{ role: "user", content }],
-    });
+    raw = await runToCompletion(
+      client,
+      {
+        ...baseParams,
+        messages: [{ role: "user", content }],
+      },
+      meter
+    );
   } catch (err) {
     translateSdkError(err, "search");
   }
@@ -602,9 +657,11 @@ export async function searchProducts({
   if (!result) {
     console.warn("[search] first answer was not valid JSON; retrying once");
     try {
-      raw = await runToCompletion(client, {
-        ...baseParams,
-        messages: [
+      raw = await runToCompletion(
+        client,
+        {
+          ...baseParams,
+          messages: [
           { role: "user", content },
           { role: "assistant", content: raw.slice(0, 4000) },
           {
@@ -613,7 +670,9 @@ export async function searchProducts({
               "That wasn't the JSON object. Reply again with ONLY the JSON object described in your instructions — no text before or after it, and no questions: the shopper cannot reply. If the product was ambiguous, price its most popular variant and name it in productSummary. If you could only confirm one or two sellers, include just those and explain the gap in \"verdict\". If the message was really a question rather than a product, use the advice format.",
           },
         ],
-      });
+        },
+        meter
+      );
     } catch (err) {
       translateSdkError(err, "search");
     }
@@ -724,12 +783,15 @@ export async function askFollowUp({
   productContext,
   userMessage,
   model = MODEL,
+  meter,
 }: {
   history: ChatTurn[];
   originalQuery: string;
   productContext: unknown;
   userMessage: string;
   model?: string;
+  /** Filled with token usage, as for searchProducts. */
+  meter?: AiUsage;
 }): Promise<string> {
   if (isMockMode()) {
     return `(Sample mode) You asked: "${userMessage}". With VFM_MOCK_SEARCH=1 no live AI call is made, so this is placeholder text. Add a real ANTHROPIC_API_KEY and unset VFM_MOCK_SEARCH to get grounded answers about "${originalQuery}".`;
@@ -762,6 +824,7 @@ ${context}
       ...(isHaikuModel(model) ? {} : { output_config: { effort: "low" } }),
       messages,
     });
+    if (meter) addUsage(meter, response.usage);
 
     if (response.stop_reason === "refusal") {
       return "I can't answer that one. Try asking about the listings above — price, delivery, warranty, or which to pick.";
@@ -771,5 +834,48 @@ ${context}
     return text || "I couldn't generate a response. Please try rephrasing.";
   } catch (err) {
     translateSdkError(err, "chat");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Health check
+// ---------------------------------------------------------------------------
+
+export type AiHealth =
+  | { ok: true; model: string; latencyMs: number }
+  | { ok: false; model: string; reason: string };
+
+/**
+ * Proves the API key works and the account can actually spend, with the
+ * smallest possible request: a one-token reply on the given model. Costs a
+ * tiny fraction of a cent.
+ *
+ * Run on demand from the admin panel, never on page load — an admin opening
+ * the dashboard shouldn't silently spend money.
+ */
+export async function pingAi(model: string): Promise<AiHealth> {
+  if (isMockMode()) {
+    return { ok: false, model, reason: "Sample mode is on (VFM_MOCK_SEARCH=1), so no AI calls are made." };
+  }
+  let client: Anthropic;
+  try {
+    client = getClient();
+  } catch {
+    return { ok: false, model, reason: "ANTHROPIC_API_KEY is not set." };
+  }
+
+  const started = Date.now();
+  try {
+    await client.messages.create({
+      model,
+      max_tokens: 1,
+      messages: [{ role: "user", content: "ping" }],
+    });
+    return { ok: true, model, latencyMs: Date.now() - started };
+  } catch (err) {
+    if (err instanceof Anthropic.APIError) {
+      return { ok: false, model, reason: describeAnthropicError(err) };
+    }
+    return { ok: false, model, reason: "Couldn't reach the Anthropic API from the server." };
   }
 }

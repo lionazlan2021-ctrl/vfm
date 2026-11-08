@@ -37,7 +37,12 @@ export class ApiError extends Error {
   constructor(
     readonly code: ErrorCode,
     message: string,
-    readonly details?: string[]
+    readonly details?: string[],
+    /**
+     * The underlying cause, for the server log and the admin panel only — e.g.
+     * Anthropic's "Your credit balance is too low". `apiError()` never sends it.
+     */
+    readonly internal?: string
   ) {
     super(message);
     this.name = "ApiError";

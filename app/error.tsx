@@ -42,7 +42,7 @@ export default function Error({
               because React state is already broken, and a full page load is
               more likely to recover than a client-side navigation. */}
           {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-          <a href="/" className="btn-quiet inline-flex items-center">
+          <a href="/app" className="btn-quiet inline-flex items-center">
             Back to search
           </a>
         </div>

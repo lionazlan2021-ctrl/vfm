@@ -11,7 +11,7 @@ export default function NotFound() {
         <p className="text-[15px] leading-relaxed max-w-prose mb-8" style={{ color: "var(--ink-soft)" }}>
           That page doesn&apos;t exist. Head back and compare something instead.
         </p>
-        <Link href="/" className="btn">
+        <Link href="/app" className="btn">
           Back to search
         </Link>
       </div>

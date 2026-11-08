@@ -167,8 +167,23 @@ npm run db:setup && npm run dev
 - [ ] Demote yourself from another admin account — `/admin` immediately returns
       to 404 for you, without waiting for the session cookie to expire
 
+### 12a. Landing page
+- [ ] `/` shows the landing page; "Try it free" and "Log in" go to `/app`
+      (signed in, the button says "Open VFM")
+- [ ] Typing a product in the landing search and pressing Compare opens `/app`
+      and runs that search once — reloading `/app` afterwards does **not** run it again
+- [ ] Scrolling: a thin green progress line grows along the top, the nav turns
+      solid, sections fade up, the big statement's words light up in turn, and
+      the example card's value bars fill when it comes into view
+- [ ] With "Reduce motion" on (macOS: Accessibility → Display), all of the above
+      is shown finished and still — nothing hidden, nothing moving
+- [ ] FAQ items open and close by click and by keyboard (Tab, then Enter)
+- [ ] Google sign-in, and its error messages, return to `/app`
+
 ### 12b. Shortcuts, haptics and branding
-- [ ] The browser tab shows the green V logo; sharing a link shows the logo card
+- [ ] The browser tab shows the green V logo — in Safari too (it uses
+      `favicon.ico`; Safari caches icons hard, so check in a private window);
+      sharing a link shows the logo card
       (check `/opengraph-image`)
 - [ ] On the home page press `/` — the search box is focused; type "n" in it and
       nothing else happens

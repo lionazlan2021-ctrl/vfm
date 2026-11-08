@@ -59,7 +59,7 @@ export default function Sidebar({
         className="px-4 py-4 flex items-center justify-between"
         style={{ borderBottom: "1px solid var(--rule)" }}
       >
-        <Link href="/" aria-label="VFM home">
+        <Link href="/app" aria-label="VFM — new search">
           <Logo size={19} />
         </Link>
         <button

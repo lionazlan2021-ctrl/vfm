@@ -14,7 +14,7 @@ import { exchangeCodeForProfile, isGoogleConfigured } from "@/lib/google-oauth";
 export const dynamic = "force-dynamic";
 
 function fail(req: NextRequest, code: string) {
-  return NextResponse.redirect(new URL(`/?auth_error=${code}`, req.nextUrl.origin));
+  return NextResponse.redirect(new URL(`/app?auth_error=${code}`, req.nextUrl.origin));
 }
 
 export async function GET(req: NextRequest) {
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
     });
     await setSessionCookie(token);
 
-    return NextResponse.redirect(new URL("/", req.nextUrl.origin));
+    return NextResponse.redirect(new URL("/app", req.nextUrl.origin));
   } catch (err) {
     console.error("[api:auth:google:callback] sign-in failed:", err);
     return fail(req, "google_failed");

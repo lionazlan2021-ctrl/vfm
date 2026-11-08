@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   if (!isGoogleConfigured()) {
     // Nothing to redirect to — send the user back to the app rather than to a
     // Google error page they can't act on.
-    return NextResponse.redirect(new URL("/?auth_error=google_unavailable", req.nextUrl.origin));
+    return NextResponse.redirect(new URL("/app?auth_error=google_unavailable", req.nextUrl.origin));
   }
 
   const state = crypto.randomUUID();

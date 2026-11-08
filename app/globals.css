@@ -366,3 +366,111 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* --------------------------------------------------------------- Landing */
+
+.landing-link {
+  font-size: 14px;
+  color: var(--ink-soft);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+.landing-link:hover {
+  color: var(--ink);
+}
+
+.landing-search:focus-within {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 4px var(--accent-wash);
+}
+
+/* Gentle float for the hero illustration. Stops for reduced motion. */
+.float-slow {
+  animation: floatY 7s ease-in-out infinite;
+}
+@keyframes floatY {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.marquee {
+  overflow: hidden;
+  /* Fade the edges so items drift in and out rather than being cut off. */
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 38s linear infinite;
+}
+.marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+.marquee-row {
+  display: flex;
+  flex-shrink: 0;
+}
+.marquee-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 28px;
+  padding-right: 28px;
+  font-size: clamp(1.6rem, 3.4vw, 2.6rem);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.marquee-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.faq-item summary {
+  list-style: none;
+  cursor: pointer;
+}
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+.faq-item .faq-icon {
+  transition: transform 0.25s ease;
+}
+.faq-item[open] .faq-icon {
+  transform: rotate(45deg);
+}
+.faq-item summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.feature-card {
+  transition: transform 0.25s cubic-bezier(.22,1,.36,1), border-color 0.25s ease;
+}
+.feature-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--rule-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .float-slow,
+  .marquee-track {
+    animation: none;
+  }
+  .marquee-track {
+    flex-wrap: wrap;
+    width: auto;
+  }
+  .marquee-row[aria-hidden="true"] {
+    display: none;
+  }
+  .feature-card:hover {
+    transform: none;
+  }
+}

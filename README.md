@@ -50,7 +50,8 @@ cp .env.example .env       # then fill in DATABASE_URL, ANTHROPIC_API_KEY, and A
 npm run dev
 ```
 
-Visit `http://localhost:3000`.
+Visit `http://localhost:3000` for the landing page, or `http://localhost:3000/app`
+for the search app itself.
 
 `DATABASE_URL` needs a real Postgres connection string before this works — see
 SETUP.md section 2.6 for how to get a free one. `npm run dev` applies any
@@ -223,7 +224,11 @@ can never be stranded invisible if the observer doesn't fire.
 
 ```
 app/
-  page.tsx                  — main app shell (client component)
+  page.tsx                  — public landing page (what VFM is; scroll animations)
+  app/page.tsx              — the search app itself, at /app (client component)
+  favicon.ico, icon.svg     — tab icons (the .ico is what Safari shows)
+  apple-icon.tsx            — iOS home-screen icon
+  opengraph-image.tsx       — link-preview image
   pricing/page.tsx          — plans and pricing (server component)
   layout.tsx                — root layout + SEO metadata
   error.tsx / not-found.tsx — error and 404 boundaries
@@ -238,6 +243,7 @@ app/
     history/[id]/route.ts   — GET/DELETE: replay or remove one stored result
     admin/stats|users|health — admin-only: counts, user management, live AI check
 components/                 — all UI components (cards, chat, sidebar, etc.)
+  landing/                  — landing-page pieces: nav, search hand-off, scroll effects
 lib/
   ai.ts                     — Anthropic integration, prompts, response schema
   mock-search.ts            — sample results for VFM_MOCK_SEARCH=1

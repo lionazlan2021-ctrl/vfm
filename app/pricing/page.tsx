@@ -34,7 +34,7 @@ export default async function PricingPage() {
         <Link href="/" aria-label="VFM home">
           <Logo size={20} />
         </Link>
-        <Link href="/" className="btn-quiet" style={{ padding: "8px 14px" }}>
+        <Link href="/app" className="btn-quiet" style={{ padding: "8px 14px" }}>
           Back to search
         </Link>
       </header>
@@ -153,7 +153,7 @@ export default async function PricingPage() {
                       Your current plan
                     </span>
                   ) : plan.price === 0 ? (
-                    <Link href="/" className="btn-quiet w-full">
+                    <Link href="/app" className="btn-quiet w-full">
                       Start free
                     </Link>
                   ) : (

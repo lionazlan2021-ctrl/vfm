@@ -342,6 +342,20 @@ appears at the bottom of the sidebar.
 From then on you can promote anyone else from inside `/admin` without touching
 either of these again.
 
+### Someone forgot their password
+
+There is no "forgot password" email yet (that needs an email provider). To let
+someone back in, run this from your computer and type the new password when
+asked — it won't show on screen:
+
+```bash
+npm run password:set -- their@email.com
+```
+
+Like `role:set`, it needs your `DATABASE_URL` working locally. It changes the
+password on the live site immediately; tell the person their new password
+privately and suggest they keep it somewhere safe.
+
 ### Things worth knowing
 
 - **Non-admins don't see a locked door.** Visiting `/admin` without permission

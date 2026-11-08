@@ -12,6 +12,7 @@
     "check": "npm run typecheck && npm run lint && npm run test",
     "plan:set": "node scripts/set-plan.mjs",
     "role:set": "node scripts/set-role.mjs",
+    "password:set": "node scripts/set-password.mjs",
     "db:setup": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "prisma:migrate": "prisma migrate dev",

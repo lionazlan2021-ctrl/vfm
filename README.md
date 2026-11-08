@@ -81,6 +81,7 @@ chat — so you can develop and demo the whole flow offline. Set it back to `0`
 | `npm run db:setup` | Create/update the local database from the schema |
 | `npm run prisma:studio` | Browse the database in a GUI |
 | `npm run plan:set -- <email> <plan>` | Move an account onto free / pro / premium |
+| `npm run password:set -- <email>` | Set a new password for a locked-out account (hidden prompt; there is no emailed reset) |
 
 > Don't run `npm run build` while `npm run dev` is running — they share
 > `.next/`, and the production build leaves the dev server unable to resolve its
@@ -232,6 +233,8 @@ lib/
   prisma.ts                 — Prisma client singleton
 scripts/
   set-plan.mjs              — move an account onto a plan (no billing yet)
+  set-role.mjs              — make an account an admin (or back to user)
+  set-password.mjs          — set a new password for a locked-out account
 prisma/
   schema.prisma             — database schema
   migrations/               — committed migration history

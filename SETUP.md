@@ -300,6 +300,19 @@ above keeps working.
 
 ---
 
+## Where the site runs (vercel.json)
+
+`vercel.json` pins the site's server code to Vercel's Singapore region
+(`sin1`), because the Supabase database is in Singapore (`ap-southeast-1`).
+Every page that touches the database makes several round trips to it; from
+Vercel's default US region each one crossed the Pacific (~0.25 s), from
+Singapore it's a few milliseconds. **If you ever move the database to another
+region, change `sin1` to the Vercel region nearest it** — otherwise this
+becomes a slowdown instead of a speed-up. The admin Health panel shows the
+database response time, which is the quickest way to check.
+
+---
+
 ## The admin panel
 
 There's an admin area at `/admin`. It shows whether the site is healthy, what
